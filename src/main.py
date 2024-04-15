@@ -90,10 +90,12 @@ def get_linked_events_for_location(location, preferred_language):
     for loc in location.split(","):
         try:
             resp = httpx.get(f'https://api.hel.fi/linkedevents/v1/place/{loc}/')
-            location_names.append(get_preferred_or_first(resp.json(),
+            name = get_preferred_or_first(resp.json(),
                 '$.name',
                 f'$.name.{preferred_language}',
-                '$.name.*'))
+                '$.name.*')
+            if name is not None:
+                location_names.append(name)
         except:
             pass
 
