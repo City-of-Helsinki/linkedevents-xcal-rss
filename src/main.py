@@ -85,6 +85,18 @@ def timed_lru_cache(seconds: int = 90, maxsize: int = 15):
 
 @timed_lru_cache(cache_ttl, cache_max_size)
 def get_linked_events_for_location(location, preferred_language):
+
+    location_names = []
+    for loc in location.split(","):
+        try:
+            resp = httpx.get(f'https://api.hel.fi/linkedevents/v1/place/{loc}/')
+            location_names.append(get_preferred_or_first(resp.json(),
+                '$.name',
+                f'$.name.{preferred_language}',
+                '$.name.*'))
+        except:
+            pass
+
     response = httpx.get(f'https://api.hel.fi/linkedevents/v1/event/?location={location}&include=location,keywords&days=31&sort=start_time')
     items = []
     for data in parse('$.data[*]').find(response.json()):
@@ -119,7 +131,7 @@ def get_linked_events_for_location(location, preferred_language):
                 )
             except:
                 enclosure = None
-                image = None   
+                image = None
         else:
             enclosure = None
             image = None
@@ -169,9 +181,9 @@ def get_linked_events_for_location(location, preferred_language):
         )
 
     channel = {
-        'title': '-',
+        'title': ", ".join(location_names),
         'link': 'https://example.org',
-        'description': '-',
+        'description': ", ".join(location_names),
         'language': '',
         'pub_date': aware_utcnow(),
         'last_build_date': aware_utcnow(),
