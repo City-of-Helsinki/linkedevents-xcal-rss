@@ -3,7 +3,7 @@ from typing import Mapping
 
 from starlette.responses import Response
 
-from .models.feed import RSSFeed
+from .models.feed import Channel
 
 
 class RSSResponse(Response):
@@ -28,5 +28,10 @@ class RSSResponse(Response):
                 headers[headername] = newheaders[headername]
         super().init_headers(headers)
 
-    def render(self, rss: RSSFeed) -> bytes:
-        return rss.to_xml(skip_empty=True)
+    def render(self, rss: Channel) -> bytes:
+        return rss.to_xml(
+            pretty_print=True,
+            encoding='UTF-8',
+            standalone=True,
+            skip_empty=True
+        )

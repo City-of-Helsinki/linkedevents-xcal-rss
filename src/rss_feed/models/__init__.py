@@ -8,4 +8,4 @@ from .textinput import TextInput
 from .enclosure import Enclosure
 from .guid import GUID
 from .source import Source
-from .feed import RSSFeed, Hours, Days
+from .feed import RSSFeed, Hours, Days, Channel

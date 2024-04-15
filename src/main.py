@@ -18,7 +18,7 @@ import dateutil.parser
 from jsonpath_ng import parse
 
 from rss_feed import (
-    RSSFeed, RSSResponse, Item, Category, GUID, Enclosure, Image, XCalCategories
+    RSSFeed, RSSResponse, Item, Category, GUID, Enclosure, Image, XCalCategories, Channel
 )
 
 cache_ttl = 3600
@@ -138,7 +138,7 @@ def get_linked_events_for_location(location, preferred_language):
                 category=categories,
                 enclosure=enclosure,
                 guid=GUID(
-                    content=get_preferred_or_first(event, '$.id', '$.id', '$.id'),
+                    content=f'https://api.hel.fi/linkedevents/v1/event/{get_preferred_or_first(event, '$.id', '$.id', '$.id')}',
                     is_permalink=None,
                 ),
                 pub_date=dateutil.parser.parse(
@@ -164,18 +164,18 @@ def get_linked_events_for_location(location, preferred_language):
             )
         )
 
-    feed = {
-        'title': '',
-        'link': '',
-        'description': '',
+    channel = {
+        'title': '-',
+        'link': 'https://example.org',
+        'description': '-',
         'language': '',
-        'pub_date': datetime.now(),
-        'last_build_date': datetime.now(),
+        'pub_date': aware_utcnow(),
+        'last_build_date': aware_utcnow(),
         'ttl': cache_ttl,
         'item': items,
     }
 
-    return RSSFeed(**feed)
+    return RSSFeed(content=channel)
 
 
 @app.get("/events", tags=["events"])

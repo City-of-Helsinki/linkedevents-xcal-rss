@@ -1,7 +1,8 @@
-import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from pydantic_xml import BaseXmlModel, element
+from pydantic import field_serializer
 
 from .category import Category
 from .enclosure import Enclosure
@@ -15,6 +16,12 @@ class XCalCategories(BaseXmlModel):
 
 
 class Item(BaseXmlModel):
+    @field_serializer('pub_date')
+    def convert_datetime_to_RFC_822(dt: datetime) -> str:
+        dt.replace(tzinfo=timezone.utc)
+        ctime = dt.ctime()
+        return (f'{ctime[0:3]}, {dt.day:02d} {ctime[4:7]}' + dt.strftime(' %Y %H:%M:%S %z'))
+
     # Basic RSS Item fields
     title: str = element(tag="title")
     link: Optional[str] = element(
@@ -45,7 +52,7 @@ class Item(BaseXmlModel):
         tag="guid",
         default=None,
     )
-    pub_date: Optional[datetime.datetime] = element(
+    pub_date: Optional[datetime] = element(
         tag="pubDate",
         default=None,
     )
@@ -68,12 +75,12 @@ class Item(BaseXmlModel):
         nsmap={"": "urn:ietf:params:xml:ns:xcal"},
         default=None,
     )
-    xcal_dtstart: Optional[datetime.datetime] = element(
+    xcal_dtstart: Optional[datetime] = element(
         tag="dtstart",
         nsmap={"": "urn:ietf:params:xml:ns:xcal"},
         default=None,
     )
-    xcal_dtend: Optional[datetime.datetime] = element(
+    xcal_dtend: Optional[datetime] = element(
         tag="dtend",
         nsmap={"": "urn:ietf:params:xml:ns:xcal"},
         default=None,
