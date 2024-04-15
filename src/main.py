@@ -113,7 +113,7 @@ def get_linked_events_for_location(location, preferred_language):
             )
             enclosure = Enclosure(
                 url=imageUrl,
-                length=loaded_image.tell(),
+                length=image_raw.num_bytes_downloaded,
                 type=f"image/{loaded_image.format.lower()}"
             )
         else:

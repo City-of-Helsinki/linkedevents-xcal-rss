@@ -9,7 +9,7 @@ COPY requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY ./helmet_events_rss_feed /opt/app
+COPY ./src /opt/app
 
 RUN chown -R app:app /opt/app
 
