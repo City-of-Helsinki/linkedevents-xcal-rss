@@ -98,24 +98,28 @@ def get_linked_events_for_location(location, preferred_language):
 
         imageUrl=get_preferred_or_first(event, '$.images[*].url', f'$.images[*].url', '$.images[*].url')
         if imageUrl is not None:
-            imageName=get_preferred_or_first(event, '$.images[*].name', f'$.images[*].name', '$.images[*].name')
-            imageAlt=get_preferred_or_first(event, '$.images[*].alt_text', f'$.images[*].alt_text', '$.images[*].alt_text')
-            image_raw = httpx.get(imageUrl)
-            loaded_image = PIL.Image.open(BytesIO(image_raw.content))
-            width, height = loaded_image.size
-            image = Image(
-                url=imageUrl,
-                title=imageName,
-                link=imageUrl,
-                description=imageAlt,
-                width=width,
-                height=height
-            )
-            enclosure = Enclosure(
-                url=imageUrl,
-                length=image_raw.num_bytes_downloaded,
-                type=f"image/{loaded_image.format.lower()}"
-            )
+            try:
+                imageName=get_preferred_or_first(event, '$.images[*].name', f'$.images[*].name', '$.images[*].name')
+                imageAlt=get_preferred_or_first(event, '$.images[*].alt_text', f'$.images[*].alt_text', '$.images[*].alt_text')
+                image_raw = httpx.get(imageUrl)
+                loaded_image = PIL.Image.open(BytesIO(image_raw.content))
+                width, height = loaded_image.size
+                image = Image(
+                    url=imageUrl,
+                    title=imageName,
+                    link=imageUrl,
+                    description=imageAlt,
+                    width=width,
+                    height=height
+                )
+                enclosure = Enclosure(
+                    url=imageUrl,
+                    length=image_raw.num_bytes_downloaded,
+                    type=f"image/{loaded_image.format.lower()}"
+                )
+            except:
+                enclosure = None
+                image = None   
         else:
             enclosure = None
             image = None
