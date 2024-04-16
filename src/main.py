@@ -138,9 +138,12 @@ def get_linked_events_for_location(location, preferred_language):
             enclosure = None
             image = None
 
-        eventUrl = get_preferred_or_first(event, '$.info_url.*', f'$.info_url.{preferred_language}', '$.info_url.*')
-        if eventUrl is None or eventUrl == "":
-            eventUrl = get_preferred_or_first(event, '$.location.info_url.*', f'$.location.info_url.{preferred_language}', '$.location.info_url.*')
+        id = get_preferred_or_first(event, '$.id', '$.id', '$.id')
+        eventUrl = f'https://helmet.finna.fi/FeedContent/LinkedEvents?id={id}'
+
+#        eventUrl = get_preferred_or_first(event, '$.info_url.*', f'$.info_url.{preferred_language}', '$.info_url.*')
+#        if eventUrl is None or eventUrl == "":
+#            eventUrl = get_preferred_or_first(event, '$.location.info_url.*', f'$.location.info_url.{preferred_language}', '$.location.info_url.*')
 
         title=get_preferred_or_first(event, '$.name.*', f'$.name.{preferred_language}', '$.name.*')
         organizer = get_preferred_or_first(event, '$.provider.*', f'$.provider.{preferred_language}', '$.provider.*')
@@ -156,7 +159,7 @@ def get_linked_events_for_location(location, preferred_language):
                 category=categories,
                 enclosure=enclosure,
                 guid=GUID(
-                    content=f'https://api.hel.fi/linkedevents/v1/event/{get_preferred_or_first(event, '$.id', '$.id', '$.id')}',
+                    content=f'https://api.hel.fi/linkedevents/v1/event/{id}',
                     is_permalink=None,
                 ),
                 pub_date=dateutil.parser.parse(
