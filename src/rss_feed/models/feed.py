@@ -1,8 +1,8 @@
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from pydantic_xml import BaseXmlModel, element, attr
 from pydantic import field_serializer
+from pydantic_xml import BaseXmlModel, attr, element
 
 from .category import Category
 from .cloud import Cloud
@@ -27,7 +27,7 @@ class Channel(
     def convert_datetime_to_RFC_822(dt: datetime) -> str:
         dt.replace(tzinfo=timezone.utc)
         ctime = dt.ctime()
-        return (f'{ctime[0:3]}, {dt.day:02d} {ctime[4:7]}' + dt.strftime(' %Y %H:%M:%S %z'))
+        return f'{ctime[0:3]}, {dt.day:02d} {ctime[4:7]}' + dt.strftime(' %Y %H:%M:%S %z')
 
     # Required Feed elements
     title: str = element(tag="title", default="")

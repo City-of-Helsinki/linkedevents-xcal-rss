@@ -4,7 +4,7 @@ version = "0.1.0"
 description = ""
 authors = ["Mikko Vihonen <mikko.vihonen@iki.fi>", "Jiri Grönroos <jiri.gronroos@iki.fi>"]
 readme = "README.md"
-packages = [{include = "helmet_events_rss_feed"}]
+packages = [{include = "src"}]
 
 [tool.poetry.dependencies]
 python = "^3.12"
@@ -33,6 +33,7 @@ six = "^1.16.0"
 sniffio = "^1.3.1"
 starlette = "^0.37.2"
 typing-extensions = "^4.11.0"
+python-dotenv = "^1.0.1"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -40,6 +41,7 @@ black = "^24.3.0"
 ruff = "^0.3.5"
 isort = "^5.13.2"
 pytest = "^8.1.1"
+deptry = "^0.16.1"
 
 [build-system]
 requires = ["poetry-core"]

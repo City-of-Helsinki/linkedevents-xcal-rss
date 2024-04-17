@@ -1,14 +1,14 @@
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from pydantic_xml import BaseXmlModel, element
 from pydantic import field_serializer
+from pydantic_xml import BaseXmlModel, element
 
 from .category import Category
 from .enclosure import Enclosure
 from .guid import GUID
-from .source import Source
 from .image import Image
+from .source import Source
 
 
 class XCalCategories(BaseXmlModel):
