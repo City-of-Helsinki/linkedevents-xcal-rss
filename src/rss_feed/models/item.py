@@ -12,15 +12,19 @@ from .source import Source
 
 
 class XCalCategories(BaseXmlModel):
-    content: List[Category] = element(tag="category", default=None, nsmap={"": "urn:ietf:params:xml:ns:xcal"})
+    content: List[Category] = element(
+        tag="category", default=None, nsmap={"": "urn:ietf:params:xml:ns:xcal"}
+    )
 
 
 class Item(BaseXmlModel):
-    @field_serializer('pub_date')
+    @field_serializer("pub_date")
     def convert_datetime_to_RFC_822(dt: datetime) -> str:
         dt.replace(tzinfo=timezone.utc)
         ctime = dt.ctime()
-        return (f'{ctime[0:3]}, {dt.day:02d} {ctime[4:7]}' + dt.strftime(' %Y %H:%M:%S %z'))
+        return f"{ctime[0:3]}, {dt.day:02d} {ctime[4:7]}" + dt.strftime(
+            " %Y %H:%M:%S %z"
+        )
 
     # Basic RSS Item fields
     title: str = element(tag="title")
@@ -36,10 +40,7 @@ class Item(BaseXmlModel):
         tag="author",
         default=None,
     )
-    category: Optional[List[Category]] = element(
-        tag="category",
-        default_factory=list
-    )
+    category: Optional[List[Category]] = element(tag="category", default_factory=list)
     comments: Optional[str] = element(
         tag="comments",
         default=None,

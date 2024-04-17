@@ -19,15 +19,14 @@ class Days(BaseXmlModel, tag="day"):
     content: List[str] = element(tag="day", default=None)
 
 
-class Channel(
-    BaseXmlModel,
-    tag="channel"
-):
-    @field_serializer('pub_date', 'last_build_date')
+class Channel(BaseXmlModel, tag="channel"):
+    @field_serializer("pub_date", "last_build_date")
     def convert_datetime_to_RFC_822(dt: datetime) -> str:
         dt.replace(tzinfo=timezone.utc)
         ctime = dt.ctime()
-        return f'{ctime[0:3]}, {dt.day:02d} {ctime[4:7]}' + dt.strftime(' %Y %H:%M:%S %z')
+        return f"{ctime[0:3]}, {dt.day:02d} {ctime[4:7]}" + dt.strftime(
+            " %Y %H:%M:%S %z"
+        )
 
     # Required Feed elements
     title: str = element(tag="title", default="")
@@ -37,20 +36,11 @@ class Channel(
     # Optional feed elements
     language: Optional[str] = element(tag="language", default=None)
     copyright: Optional[str] = element(tag="copyright", default=None)
-    managing_editor: Optional[str] = element(
-        tag="managingEditor",
-        default=None
-    )
+    managing_editor: Optional[str] = element(tag="managingEditor", default=None)
     webmaster: Optional[str] = element(tag="webmaster", default=None)
     pub_date: Optional[datetime] = element(tag="pubDate", default=None)
-    last_build_date: Optional[datetime] = element(
-        tag="lastBuildDate",
-        default=None
-    )
-    category: Optional[List[Category]] = element(
-        tag="category",
-        default_factory=list
-    )
+    last_build_date: Optional[datetime] = element(tag="lastBuildDate", default=None)
+    category: Optional[List[Category]] = element(tag="category", default_factory=list)
     generator: str = element(tag="generator", default="Linked Events RSS")
     docs: str = element(
         tag="docs", default="https://validator.w3.org/feed/docs/rss2.html"

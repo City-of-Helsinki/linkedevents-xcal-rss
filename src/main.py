@@ -12,18 +12,16 @@ import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
 from jsonpath_ng import parse
-from loguru import logger
 
-from rss_feed import (GUID, Category, Enclosure, Image, Item, RSSFeed,
-                      RSSResponse, XCalCategories)
+from rss_feed import (GUID, Category, Enclosure, Image, Item, RSSFeed, RSSResponse, XCalCategories)
 
-load_dotenv.find_dotenv('.env.example')
+load_dotenv()
 
 feed_base_url = os.getenv("FEED_BASE_URL")
 linked_events_base_url = os.getenv("LINKED_EVENTS_BASE_URL")
 event_url_template = os.getenv("EVENT_URL_TEMPLATE")
-cache_ttl = os.getenv("CACHE_TTL")
-cache_max_size = os.getenv("CACHE_MAX_SIZE")
+cache_ttl = int(os.getenv("CACHE_TTL"))
+cache_max_size = int(os.getenv("CACHE_MAX_SIZE"))
 
 app = FastAPI(
     title=os.environ.get("APP_TITLE"),
@@ -113,10 +111,7 @@ def get_linked_events_for_location(
     locations = get_locations(location_string=location_string, preferred_language=preferred_language)
 
     response = httpx.get(
-        f'{linked_events_base_url}/event/' +
-        f'?location={location_string}' +
-        f'{'&include=keywords' if include_categories else ''}' +
-        '&days=31&sort=start_time'
+        f"{linked_events_base_url}/event/?location={location_string}{"&include=keywords" if include_categories else ""}&days=31&sort=start_time"
     )
 
     items = []

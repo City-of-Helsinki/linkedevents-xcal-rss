@@ -7,8 +7,8 @@ from .models.feed import Channel
 
 
 class RSSResponse(Response):
-    media_type = 'application/xml'
-    charset = 'utf-8'
+    media_type = "application/xml"
+    charset = "utf-8"
 
     @property
     def etag(self) -> str:
@@ -16,10 +16,10 @@ class RSSResponse(Response):
 
     def init_headers(self, headers: Mapping[str, str] = None) -> None:
         newheaders = {
-            'Accept-Range': 'bytes',
-            'Connection': 'Keep-Alive',
-            'ETag': self.etag,
-            'Keep-Alive': 'timeout=5, max=100',
+            "Accept-Range": "bytes",
+            "Connection": "Keep-Alive",
+            "ETag": self.etag,
+            "Keep-Alive": "timeout=5, max=100",
         }
 
         headers = headers or {}
@@ -30,8 +30,5 @@ class RSSResponse(Response):
 
     def render(self, rss: Channel) -> bytes:
         return rss.to_xml(
-            pretty_print=True,
-            encoding='UTF-8',
-            standalone=True,
-            skip_empty=True
+            pretty_print=True, encoding="UTF-8", standalone=True, skip_empty=True
         )
