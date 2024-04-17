@@ -9,7 +9,7 @@ packages = [{include = "src"}]
 [tool.poetry.dependencies]
 python = "^3.12"
 fastapi = "^0.110.1"
-pydantic-xml = "^2.9.0"
+pydantic-xml = {extras = ["lxml"], version = "^2.9.1"}
 uvicorn = "^0.29.0"
 jsonpath-ng = "^1.6.1"
 python-dateutil="^2.9.0"
