@@ -2,6 +2,7 @@ import os
 import asyncio
 from functools import wraps
 
+
 from datetime import datetime, timezone
 from io import BytesIO
 from typing import Annotated
@@ -26,6 +27,7 @@ linked_events_base_url = os.getenv("LINKED_EVENTS_BASE_URL")
 event_url_template = os.getenv("EVENT_URL_TEMPLATE")
 cache_ttl = int(os.getenv("CACHE_TTL"))
 cache_max_size = int(os.getenv("CACHE_MAX_SIZE"))
+uvicorn_workers = int(os.getenv("UVICORN_WORKERS"))
 
 cache = {}
 
@@ -252,7 +254,7 @@ async def get_events(
     return RSSResponse(feed)
 
 
-config = uvicorn.Config(app=app, host="0.0.0.0", port=8000, log_level="info", workers=4)
+config = uvicorn.Config(app=app, host="0.0.0.0", port=8000, log_level="info", workers=uvicorn_workers)
 server = uvicorn.Server(config=config)
 
 
