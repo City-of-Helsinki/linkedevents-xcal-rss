@@ -1,8 +1,11 @@
 import os
-from datetime import datetime, timedelta, timezone
-from functools import lru_cache, wraps
+import asyncio
+from functools import wraps
+
+from datetime import datetime, timezone
 from io import BytesIO
 from typing import Annotated
+from contextlib import asynccontextmanager
 
 import dateutil.parser
 import httpx
@@ -11,6 +14,7 @@ import PIL.Image
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.concurrency import run_in_threadpool
 from jsonpath_ng import parse
 
 from rss_feed import (GUID, Category, Enclosure, Image, Item, RSSFeed, RSSResponse, XCalCategories)
@@ -22,6 +26,44 @@ linked_events_base_url = os.getenv("LINKED_EVENTS_BASE_URL")
 event_url_template = os.getenv("EVENT_URL_TEMPLATE")
 cache_ttl = int(os.getenv("CACHE_TTL"))
 cache_max_size = int(os.getenv("CACHE_MAX_SIZE"))
+
+cache = {}
+
+
+def update_cache():
+
+    iter = list(cache)
+    for key in iter:
+        kwargs = {x: i for i, s in enumerate(key[1]) for x in s}
+        kwargs["update_wrapper_cache"] = True
+        get_linked_events_for_location(*key[0], **kwargs)
+
+
+async def periodic(interval_sec, func, *args, **kwargs):
+    while True:
+        await run_in_threadpool(func, *args, **kwargs)
+        await asyncio.sleep(interval_sec)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    asyncio.create_task(periodic(cache_ttl, update_cache))
+    yield
+
+
+def wrapper_cache(func):
+    @wraps(func)
+    def wrapper_func(*args, **kwargs):
+        if (args, frozenset(kwargs)) in cache and kwargs.get("update_wrapper_cache") is None:
+            return cache[(args, frozenset(kwargs))]
+        else:
+            kwargs.pop("update_wrapper_cache", None)
+            result = func(*args, **kwargs)
+            cache[(args, frozenset(kwargs))] = result
+            return result
+
+    return wrapper_func
+
 
 app = FastAPI(
     title=os.environ.get("APP_TITLE"),
@@ -35,6 +77,7 @@ app = FastAPI(
         "name": os.environ.get("APP_LICENSE_NAME"),
         "url": os.environ.get("APP_LICENSE_URL"),
     },
+    lifespan=lifespan
 )
 
 
@@ -62,26 +105,6 @@ def aware_utcnow():
     return datetime.now(timezone.utc)
 
 
-# taken from https://stackoverflow.com/questions/31771286/python-in-memory-cache-with-time-to-live
-def timed_lru_cache(seconds: int = 90, maxsize: int = 15):
-    def wrapper_cache(func):
-        func = lru_cache(maxsize=maxsize)(func)
-        func.lifetime = timedelta(seconds=seconds)
-        func.expiration = aware_utcnow() + func.lifetime
-
-        @wraps(func)
-        def wrapped_func(*args, **kwargs):
-            if aware_utcnow() >= func.expiration:
-                func.cache_clear()
-                func.expiration = aware_utcnow() + func.lifetime
-
-            return func(*args, **kwargs)
-
-        return wrapped_func
-
-    return wrapper_cache
-
-
 def get_locations(location_string, preferred_language):
     locations = {}
     for loc in location_string.split(","):
@@ -101,7 +124,7 @@ def get_locations(location_string, preferred_language):
     return locations
 
 
-@timed_lru_cache(cache_ttl, cache_max_size)
+@wrapper_cache
 def get_linked_events_for_location(
     location_string, preferred_language: str = 'fi',
     fetch_image_data: bool = False,
@@ -219,36 +242,19 @@ def get_linked_events_for_location(
 
 
 @app.get("/events", tags=["events"])
-def get_events(
-    location:  Annotated[str, Query(pattern='^[a-z]*:[0-9]+(,[a-z]*:[0-9]+)*$')],
+async def get_events(
+    location:  Annotated[str, Query(pattern='^tprek:[0-9]+(,tprek:[0-9]+)*$')],
     preferred_language: Annotated[str, Query(pattern='^fi|sv|en$')],
     fetch_image_data: bool | None = False,
     include_categories: bool | None = False
 ):
-    return RSSResponse(
-        get_linked_events_for_location(
-            location,
-            preferred_language,
-            fetch_image_data,
-            include_categories)
-    )
+    feed = await run_in_threadpool(get_linked_events_for_location, location, preferred_language, fetch_image_data, include_categories)
+    return RSSResponse(feed)
 
 
-def server():
-    #    LOGGING_CONFIG["formatters"]["default"][
-    #        "fmt"
-    #    ] = "%(asctime)s [%(name)s] %(levelprefix)s %(message)s"
-    #    LOGGING_CONFIG["formatters"]["access"][
-    #        "fmt"
-    #    ] = '%(asctime)s %(levelprefix)s %(client_addr)s - "%(request_line)s" %(status_code)s'
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info",
-    )
+config = uvicorn.Config(app=app, host="0.0.0.0", port=8000, log_level="info", workers=4)
+server = uvicorn.Server(config=config)
 
 
 if __name__ == "__main__":
-    server()
+    server.run()
