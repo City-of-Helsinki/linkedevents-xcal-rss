@@ -7,7 +7,7 @@ RUN addgroup --system app && \
 
 COPY requirements.txt .
 
-RUN apt install -y memcached
+RUN apt-get update && apt-get install -y memcached
 RUN mkdir /var/run/memcached/
 RUN chown nobody:nogroup /var/run/memcached
 RUN chmod 0777 /var/run/memcached
@@ -16,10 +16,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY ./src /opt/app
 
+RUN chmod 0755 entrypoint.sh
 RUN chown -R app:app /opt/app
 
 USER app
 
-CMD ["/bin/bash", "-c" "memcached -d -m 1024 -u memcache -c 1024 -P /var/run/memcached/memcached.pid -s /var/run/memcached/memcached.sock -a 0755;python3 main.py"]
+CMD ["/bin/sh", "-c", "/opt/app/entrypoint.sh"]
 
 EXPOSE 8000/TCP
