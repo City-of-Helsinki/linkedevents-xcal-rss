@@ -1,22 +1,24 @@
 import os
-import asyncio
-from functools import wraps
-
-
-from datetime import datetime, timezone
-from io import BytesIO
-from typing import Annotated
-from contextlib import asynccontextmanager
+import time
 
 import dateutil.parser
 import httpx
 import PIL
 import PIL.Image
 import uvicorn
+
+from datetime import datetime, timezone
+from io import BytesIO
+from typing import Annotated
+from contextlib import asynccontextmanager
+
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.concurrency import run_in_threadpool
-from jsonpath_ng import parse
+from jsonpath_ng.ext import parse
+from pymemcache.client import base
+
+from multiprocessing import Process
+
 
 from rss_feed import (GUID, Category, Enclosure, Image, Item, RSSFeed, RSSResponse, XCalCategories)
 
@@ -28,44 +30,62 @@ event_url_template = os.getenv("EVENT_URL_TEMPLATE")
 cache_ttl = int(os.getenv("CACHE_TTL"))
 cache_max_size = int(os.getenv("CACHE_MAX_SIZE"))
 uvicorn_workers = int(os.getenv("UVICORN_WORKERS"))
+kirkanta_base_url = os.getenv("KIRKANTA_BASE_URL")
+consortium_id = int(os.getenv("CONSORTIUM_ID"))
 
-cache = {}
-
-
-def update_cache():
-
-    iter = list(cache)
-    for key in iter:
-        kwargs = {x: i for i, s in enumerate(key[1]) for x in s}
-        kwargs["update_wrapper_cache"] = True
-        get_linked_events_for_location(*key[0], **kwargs)
+memcached_client = base.Client('unix:/run/memcached/memcached.sock')
 
 
-async def periodic(interval_sec, func, *args, **kwargs):
+def populate_cache():
+
+    libraries = httpx.get(
+        '{kirkanta_base_url}/library?consortium={consortium}&with=customData'.format(
+            kirkanta_base_url=kirkanta_base_url,
+            consortium=consortium_id)
+        ).json()
+
+    total = int(parse('$.total').find(libraries)[0].value)
+    parsed = 0
+
+    ids = [id.value for id in parse("$.items[*].customData[?(@.id == 'le_rss_locations')].value").find(libraries) if not None]
+
+    while parsed < total:
+        libraries = httpx.get(
+            '{kirkanta_base_url}/library?consortium={consortium}&with=customData&skip={skip}'.format(
+                kirkanta_base_url=kirkanta_base_url,
+                consortium=consortium_id,
+                skip=parsed)
+        ).json()
+        parsed += len([id.value for id in parse("$.items[*]").find(libraries)])
+        ids += [id.value for id in parse("$.items[*].customData[?(@.id == 'le_rss_locations')].value").find(libraries)]
+
+    for id in ids:
+        for lang in ["fi", "en", "sv"]:
+            memcached_client.set(
+                f"{id},{lang}",
+                get_linked_events_for_location(
+                    f"{id}", lang, True, True)
+                .to_xml(
+                    pretty_print=True,
+                    encoding="UTF-8",
+                    standalone=True,
+                    skip_empty=True
+                )
+            )
+
+
+def periodic(interval_sec, func, *args, **kwargs):
     while True:
-        await run_in_threadpool(func, *args, **kwargs)
-        await asyncio.sleep(interval_sec)
+        func(*args, **kwargs)
+        time.sleep(interval_sec)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    asyncio.create_task(periodic(cache_ttl, update_cache))
+    p = Process(target=periodic, args=(cache_ttl, populate_cache))
+    p.start()
     yield
-
-
-def wrapper_cache(func):
-    @wraps(func)
-    def wrapper_func(*args, **kwargs):
-        if (args, frozenset(kwargs)) in cache and kwargs.get("update_wrapper_cache") is None:
-            return cache[(args, frozenset(kwargs))]
-        else:
-            kwargs.pop("update_wrapper_cache", None)
-            result = func(*args, **kwargs)
-            cache[(args, frozenset(kwargs))] = result
-            return result
-
-    return wrapper_func
-
+    p.kill()
 
 app = FastAPI(
     title=os.environ.get("APP_TITLE"),
@@ -126,11 +146,10 @@ def get_locations(location_string, preferred_language):
     return locations
 
 
-@wrapper_cache
 def get_linked_events_for_location(
     location_string, preferred_language: str = 'fi',
-    fetch_image_data: bool = False,
-    include_categories: bool = False
+    fetch_image_data: bool = True,
+    include_categories: bool = True
 ):
 
     locations = get_locations(location_string=location_string, preferred_language=preferred_language)
@@ -245,13 +264,14 @@ def get_linked_events_for_location(
 
 @app.get("/events", tags=["events"])
 async def get_events(
-    location:  Annotated[str, Query(pattern='^tprek:[0-9]+(,tprek:[0-9]+)*$')],
-    preferred_language: Annotated[str, Query(pattern='^fi|sv|en$')],
-    fetch_image_data: bool | None = False,
-    include_categories: bool | None = False
+    location:  Annotated[str, Query(pattern='^[a-z]*:[0-9]+(,[a-z]*:[0-9]+)*$')],
+    preferred_language: Annotated[str, Query(pattern='^fi|sv|en$')]
 ):
-    feed = await run_in_threadpool(get_linked_events_for_location, location, preferred_language, fetch_image_data, include_categories)
-    return RSSResponse(feed)
+    try:
+        xml = memcached_client.get(f"{location},{preferred_language}")
+        return RSSResponse(xml)
+    except BaseException:
+        raise HTTPException(status_code=404, detail="Feed not found")
 
 
 config = uvicorn.Config(app=app, host="0.0.0.0", port=8000, log_level="info", workers=uvicorn_workers)
