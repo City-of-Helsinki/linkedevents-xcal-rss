@@ -1,5 +1,6 @@
 import os
-import time
+import urllib
+import urllib.parse
 
 import dateutil.parser
 import httpx
@@ -14,10 +15,15 @@ from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
+
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.jobstores.memory import MemoryJobStore
+from apscheduler.executors.pool import ProcessPoolExecutor
+
 from jsonpath_ng.ext import parse
 from pymemcache.client import base
 
-from multiprocessing import Process
+from multiprocessing import Pool
 
 
 from rss_feed import (GUID, Category, Enclosure, Image, Item, RSSFeed, RSSResponse, XCalCategories)
@@ -32,12 +38,50 @@ cache_max_size = int(os.getenv("CACHE_MAX_SIZE"))
 uvicorn_workers = int(os.getenv("UVICORN_WORKERS"))
 kirkanta_base_url = os.getenv("KIRKANTA_BASE_URL")
 consortium_id = int(os.getenv("CONSORTIUM_ID"))
+api_client_pool_size = int(os.getenv("API_CLIENT_POOL_SIZE"))
+load_images_from_api = bool(os.getenv("LOAD_IMAGES_FROM_API"))
+load_keywords_from_api = bool(os.getenv("LOAD_KEYWORDS_FROM_API"))
+
 
 memcached_client = base.Client('unix:/run/memcached/memcached.sock')
 
 
-def populate_cache():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    scheduler.add_job(populate_cache, 'interval', id='populate_cache', seconds=10)
+    scheduler.start()
+    yield
+    scheduler.remove_job('populate_cache')
+    scheduler.shutdown(wait=False)
 
+
+scheduler = BackgroundScheduler(
+    jobstores={'default': MemoryJobStore()},
+    executors={'default': ProcessPoolExecutor(2)},
+    job_defaults={'coalesce': True, 'max_instances': 1},
+    timezone='Europe/Helsinki'
+)
+
+
+def get_and_store_events(id):
+    try:
+        for lang in ["fi", "en", "sv"]:
+            memcached_client.set(
+                f"{id},{lang}",
+                get_linked_events_for_location(
+                    f"{id}", lang, True, True)
+                .to_xml(
+                    pretty_print=False,
+                    encoding="UTF-8",
+                    standalone=True,
+                    skip_empty=True
+                )
+            )
+    except BaseException:
+        pass
+
+
+def populate_cache():
     libraries = httpx.get(
         '{kirkanta_base_url}/library?consortium={consortium}&with=customData'.format(
             kirkanta_base_url=kirkanta_base_url,
@@ -59,48 +103,8 @@ def populate_cache():
         parsed += len([id.value for id in parse("$.items[*]").find(libraries)])
         ids += [id.value for id in parse("$.items[*].customData[?(@.id == 'le_rss_locations')].value").find(libraries)]
 
-    for id in ids:
-        for lang in ["fi", "en", "sv"]:
-            memcached_client.set(
-                f"{id},{lang}",
-                get_linked_events_for_location(
-                    f"{id}", lang, True, True)
-                .to_xml(
-                    pretty_print=True,
-                    encoding="UTF-8",
-                    standalone=True,
-                    skip_empty=True
-                )
-            )
-
-
-def periodic(interval_sec, func, *args, **kwargs):
-    while True:
-        func(*args, **kwargs)
-        time.sleep(interval_sec)
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    p = Process(target=periodic, args=(cache_ttl, populate_cache))
-    p.start()
-    yield
-    p.kill()
-
-app = FastAPI(
-    title=os.environ.get("APP_TITLE"),
-    description=os.environ.get("APP_DESCRIPTION"),
-    version=os.environ.get("APP_VERSION"),
-    contact={
-        "name": os.environ.get("APP_CONTACT_NAME"),
-        "url": os.environ.get("APP_CONTACT_URL"),
-    },
-    license_info={
-        "name": os.environ.get("APP_LICENSE_NAME"),
-        "url": os.environ.get("APP_LICENSE_URL"),
-    },
-    lifespan=lifespan
-)
+    with Pool(api_client_pool_size) as fetcher_pool:
+        fetcher_pool.map(get_and_store_events, ids)
 
 
 def get_preferred_or_first(root, pathIfExist, pathOfPreferred, pathOfFirst):
@@ -115,6 +119,22 @@ def get_preferred_or_first(root, pathIfExist, pathOfPreferred, pathOfFirst):
     except BaseException:
         value = None
     return value
+
+
+app = FastAPI(
+    title=os.environ.get("APP_TITLE"),
+    description=os.environ.get("APP_DESCRIPTION"),
+    version=os.environ.get("APP_VERSION"),
+    contact={
+        "name": os.environ.get("APP_CONTACT_NAME"),
+        "url": os.environ.get("APP_CONTACT_URL"),
+    },
+    license_info={
+        "name": os.environ.get("APP_LICENSE_NAME"),
+        "url": os.environ.get("APP_LICENSE_URL"),
+    },
+    lifespan=lifespan
+ )
 
 
 @app.get("/status", tags=["status"])
@@ -146,20 +166,11 @@ def get_locations(location_string, preferred_language):
     return locations
 
 
-def get_linked_events_for_location(
-    location_string, preferred_language: str = 'fi',
-    fetch_image_data: bool = True,
-    include_categories: bool = True
-):
-
-    locations = get_locations(location_string=location_string, preferred_language=preferred_language)
-
-    response = httpx.get(
-        f"{linked_events_base_url}/event/?location={location_string}{"&include=keywords" if include_categories else ""}&days=31&sort=start_time"
-    )
-
+def parse_to_itemlist(linked_events_json, preferred_language, locations):
     items = []
-    for data in parse('$.data[*]').find(response.json()):
+    include_categories = load_keywords_from_api
+    fetch_image_data = load_images_from_api
+    for data in parse('$.data[*]').find(linked_events_json):
         event = data.value
         categories = []
         if include_categories:
@@ -184,9 +195,9 @@ def get_linked_events_for_location(
                     type = f"image/{loaded_image.format.lower()}"
                 else:
                     length = 0
-                    width = None
-                    height = None
-                    type = ""
+                    width = 0
+                    height = 0
+                    type = "image"
                 enclosure = Enclosure(url=imageUrl, length=length, type=type)
                 image = Image(url=imageUrl, title=imageName, link=imageUrl, description=imageAlt, width=width, height=height)
             except BaseException:
@@ -243,6 +254,34 @@ def get_linked_events_for_location(
                 xcal_categories=XCalCategories(content=categories),
             )
         )
+    return items
+
+
+def get_linked_events_for_location(
+    location_string, preferred_language: str = 'fi',
+    fetch_image_data: bool = True,
+    include_categories: bool = True
+):
+    locations = get_locations(location_string=location_string, preferred_language=preferred_language)
+
+    items = []
+    page_number = 1
+    next = True
+
+    while next:
+        response = httpx.get(
+            f"{linked_events_base_url}/event/?location={location_string}{"&include=keywords" if include_categories else ""}&days=31&sort=start_time&page={page_number}"
+        )
+        items += parse_to_itemlist(response.json(), preferred_language, locations)
+        next_page = parse('$.meta.next').find(response.json())[0].value
+        if next_page is None:
+            next = False
+        else:
+            next = True
+            next_page_url = urllib.parse.urlparse(next_page, allow_fragments=False).query
+            page_number = int(urllib.parse.parse_qs(next_page_url)["page"][0])
+
+    print(f"fetched {location_string}, language {preferred_language}, {len(items)} items")
 
     channel = {
         'title': ", ".join([value.get("name") for key, value in locations.items() if value.get("name")]),
@@ -274,7 +313,13 @@ async def get_events(
         raise HTTPException(status_code=404, detail="Feed not found")
 
 
-config = uvicorn.Config(app=app, host="0.0.0.0", port=8000, log_level="info", workers=uvicorn_workers)
+config = uvicorn.Config(
+    app=app,
+    host="0.0.0.0",
+    port=8000,
+    log_level="info",
+    workers=uvicorn_workers
+)
 server = uvicorn.Server(config=config)
 
 
