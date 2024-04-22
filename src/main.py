@@ -30,6 +30,23 @@ from rss_feed import (GUID, Category, Enclosure, Image, Item, RSSFeed, RSSRespon
 
 load_dotenv()
 
+
+def strtobool(value, raise_exc=False):
+    _true_set = {'yes', 'true', 't', 'y', '1'}
+    _false_set = {'no', 'false', 'f', 'n', '0'}
+
+    if isinstance(value, str):
+        value = value.lower()
+        if value in _true_set:
+            return True
+        if value in _false_set:
+            return False
+
+    if raise_exc:
+        raise ValueError('Expected "%s"' % '", "'.join(_true_set | _false_set))
+    return None
+
+
 feed_base_url = os.getenv("FEED_BASE_URL")
 linked_events_base_url = os.getenv("LINKED_EVENTS_BASE_URL")
 event_url_template = os.getenv("EVENT_URL_TEMPLATE")
@@ -39,8 +56,8 @@ uvicorn_workers = int(os.getenv("UVICORN_WORKERS"))
 kirkanta_base_url = os.getenv("KIRKANTA_BASE_URL")
 consortium_id = int(os.getenv("CONSORTIUM_ID"))
 api_client_pool_size = int(os.getenv("API_CLIENT_POOL_SIZE"))
-load_images_from_api = bool(os.getenv("LOAD_IMAGES_FROM_API"))
-load_keywords_from_api = bool(os.getenv("LOAD_KEYWORDS_FROM_API"))
+load_images_from_api = strtobool(os.getenv("LOAD_IMAGES_FROM_API") )
+load_keywords_from_api = strtobool(os.getenv("LOAD_KEYWORDS_FROM_API"))
 
 
 memcached_client = base.Client('unix:/run/memcached/memcached.sock')
@@ -48,8 +65,10 @@ memcached_client = base.Client('unix:/run/memcached/memcached.sock')
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    scheduler.add_job(populate_cache, 'interval', id='populate_cache', seconds=10)
+    scheduler.add_job(populate_cache, 'interval', id='populate_cache', seconds=cache_ttl)
     scheduler.start()
+    for job in scheduler.get_jobs():
+        job.modify(next_run_time=datetime.now())
     yield
     scheduler.remove_job('populate_cache')
     scheduler.shutdown(wait=False)
@@ -280,8 +299,6 @@ def get_linked_events_for_location(
             next = True
             next_page_url = urllib.parse.urlparse(next_page, allow_fragments=False).query
             page_number = int(urllib.parse.parse_qs(next_page_url)["page"][0])
-
-    print(f"fetched {location_string}, language {preferred_language}, {len(items)} items")
 
     channel = {
         'title': ", ".join([value.get("name") for key, value in locations.items() if value.get("name")]),
