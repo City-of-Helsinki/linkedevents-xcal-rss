@@ -214,89 +214,88 @@ def parse_to_itemlist(linked_events_json, preferred_language, locations):
 
         if (is_super_event and skip_super_events):
             logger.debug(f"Skipped: super event {id}")
-            pass
+        else:
+            categories = []
+            if include_categories:
+                for keyword in [match.value for match in parse('$.keywords[*]').find(event)]:
+                    categories.append(Category(
+                        content=get_preferred_or_first(keyword,  '$.name', f'$.name.{preferred_language}', '$.name.*').capitalize(),
+                        domain=parse('$.@id').find(keyword)[0].value
+                    ))
 
-        categories = []
-        if include_categories:
-            for keyword in [match.value for match in parse('$.keywords[*]').find(event)]:
-                categories.append(Category(
-                    content=get_preferred_or_first(keyword,  '$.name', f'$.name.{preferred_language}', '$.name.*').capitalize(),
-                    domain=parse('$.@id').find(keyword)[0].value
-                ))
-
-        imageUrl = get_preferred_or_first(event, '$.images[*].url', '$.images[*].url', '$.images[*].url')
-        if imageUrl is not None:
-            try:
-                imageName = get_preferred_or_first(event, '$.images[*].name', '$.images[*].name', '$.images[*].name')
-                imageAlt = get_preferred_or_first(event, '$.images[*].alt_text', '$.images[*].alt_text', '$.images[*].alt_text')
-                if fetch_image_data:
-                    image_raw = httpx.get(imageUrl)
-                    if image_raw.status_code != 200:
-                        raise HTTPException(status_code=404, detail=f"Image not found: {imageUrl}")
-                    length = image_raw.num_bytes_downloaded
-                    loaded_image = PIL.Image.open(BytesIO(image_raw.content))
-                    width, height = loaded_image.size
-                    type = f"image/{loaded_image.format.lower()}"
-                else:
-                    length = 0
-                    width = 0
-                    height = 0
-                    type = "image"
-                enclosure = Enclosure(url=imageUrl, length=length, type=type)
-                image = Image(url=imageUrl, title=imageName, link=imageUrl, description=imageAlt, width=width, height=height)
-            except BaseException:
+            imageUrl = get_preferred_or_first(event, '$.images[*].url', '$.images[*].url', '$.images[*].url')
+            if imageUrl is not None:
+                try:
+                    imageName = get_preferred_or_first(event, '$.images[*].name', '$.images[*].name', '$.images[*].name')
+                    imageAlt = get_preferred_or_first(event, '$.images[*].alt_text', '$.images[*].alt_text', '$.images[*].alt_text')
+                    if fetch_image_data:
+                        image_raw = httpx.get(imageUrl)
+                        if image_raw.status_code != 200:
+                            raise HTTPException(status_code=404, detail=f"Image not found: {imageUrl}")
+                        length = image_raw.num_bytes_downloaded
+                        loaded_image = PIL.Image.open(BytesIO(image_raw.content))
+                        width, height = loaded_image.size
+                        type = f"image/{loaded_image.format.lower()}"
+                    else:
+                        length = 0
+                        width = 0
+                        height = 0
+                        type = "image"
+                    enclosure = Enclosure(url=imageUrl, length=length, type=type)
+                    image = Image(url=imageUrl, title=imageName, link=imageUrl, description=imageAlt, width=width, height=height)
+                except BaseException:
+                    enclosure = None
+                    image = None
+            else:
                 enclosure = None
                 image = None
-        else:
-            enclosure = None
-            image = None
 
-        location_id = get_preferred_or_first(event, '$.location.@id', '$.location.@id', '$.location.@id')
+            location_id = get_preferred_or_first(event, '$.location.@id', '$.location.@id', '$.location.@id')
 
-        if event_url_template is not None:
-            eventUrl = event_url_template.format(id=id)
-        else:
-            eventUrl = get_preferred_or_first(event, '$.info_url.*', f'$.info_url.{preferred_language}', '$.info_url.*')
-            if eventUrl is None or eventUrl == "":
-                eventUrl = locations[location_id].get("info_url")
+            if event_url_template is not None:
+                eventUrl = event_url_template.format(id=id)
+            else:
+                eventUrl = get_preferred_or_first(event, '$.info_url.*', f'$.info_url.{preferred_language}', '$.info_url.*')
+                if eventUrl is None or eventUrl == "":
+                    eventUrl = locations[location_id].get("info_url")
 
-        title = get_preferred_or_first(event, '$.name.*', f'$.name.{preferred_language}', '$.name.*')
+            title = get_preferred_or_first(event, '$.name.*', f'$.name.{preferred_language}', '$.name.*')
 
-        organizer = get_preferred_or_first(event, '$.provider.*', f'$.provider.{preferred_language}', '$.provider.*')
-        if organizer is None or organizer == "":
-            organizer = get_preferred_or_first(event, '$.location.name.*', f'$.location.name.{preferred_language}', '$.location.name.*')
+            organizer = get_preferred_or_first(event, '$.provider.*', f'$.provider.{preferred_language}', '$.provider.*')
+            if organizer is None or organizer == "":
+                organizer = get_preferred_or_first(event, '$.location.name.*', f'$.location.name.{preferred_language}', '$.location.name.*')
 
-        items.append(
-            Item(
-                title=title,
-                link=eventUrl,
-                description=get_preferred_or_first(event, '$.short_description', f'$.short_description.{preferred_language}', '$.short_description.*'),
-                author=locations[location_id].get("email"),
-                category=categories,
-                enclosure=enclosure,
-                guid=GUID(content=f'{linked_events_base_url}/event/{id}', is_permalink=None),
-                pub_date=dateutil.parser.parse(
-                    get_preferred_or_first(event, '$.last_modified_time', '$.last_modified_time', '$.last_modified_time')
-                ),
-                xcal_title=title,
-                xcal_featured=image,
-                xcal_dtstart=dateutil.parser.parse(
-                    get_preferred_or_first(event, '$.start_time', '$.start_time', '$.start_time')
-                ),
-                xcal_dtend=dateutil.parser.parse(
-                    get_preferred_or_first(event, '$.end_time', '$.end_time', '$.end_time')
-                ),
-                xcal_content=get_preferred_or_first(event, '$.short_description', f'$.short_description.{preferred_language}', '$.short_description.*'),
-                xcal_organizer=organizer,
-                xcal_organizer_url=get_preferred_or_first(event, '$.info_url.name.*', f'$.info_url.name.{preferred_language}', '$.info_url.name.*'),
-                xcal_location=locations[location_id].get("name"),
-                xcal_location_address=locations[location_id].get("street_address"),
-                xcal_location_city=locations[location_id].get("locality"),
-                xcal_url=eventUrl,
-                xcal_cost=get_preferred_or_first(event, '$.offers[*].price', '$.offers[*].price[*].{preferred_language}', '$.offers[*].price[*].*'),
-                xcal_categories=XCalCategories(content=categories),
+            items.append(
+                Item(
+                    title=title,
+                    link=eventUrl,
+                    description=get_preferred_or_first(event, '$.short_description', f'$.short_description.{preferred_language}', '$.short_description.*'),
+                    author=locations[location_id].get("email"),
+                    category=categories,
+                    enclosure=enclosure,
+                    guid=GUID(content=f'{linked_events_base_url}/event/{id}', is_permalink=None),
+                    pub_date=dateutil.parser.parse(
+                        get_preferred_or_first(event, '$.last_modified_time', '$.last_modified_time', '$.last_modified_time')
+                    ),
+                    xcal_title=title,
+                    xcal_featured=image,
+                    xcal_dtstart=dateutil.parser.parse(
+                        get_preferred_or_first(event, '$.start_time', '$.start_time', '$.start_time')
+                    ),
+                    xcal_dtend=dateutil.parser.parse(
+                        get_preferred_or_first(event, '$.end_time', '$.end_time', '$.end_time')
+                    ),
+                    xcal_content=get_preferred_or_first(event, '$.short_description', f'$.short_description.{preferred_language}', '$.short_description.*'),
+                    xcal_organizer=organizer,
+                    xcal_organizer_url=get_preferred_or_first(event, '$.info_url.name.*', f'$.info_url.name.{preferred_language}', '$.info_url.name.*'),
+                    xcal_location=locations[location_id].get("name"),
+                    xcal_location_address=locations[location_id].get("street_address"),
+                    xcal_location_city=locations[location_id].get("locality"),
+                    xcal_url=eventUrl,
+                    xcal_cost=get_preferred_or_first(event, '$.offers[*].price', '$.offers[*].price[*].{preferred_language}', '$.offers[*].price[*].*'),
+                    xcal_categories=XCalCategories(content=categories),
+                )
             )
-        )
     return items
 
 
