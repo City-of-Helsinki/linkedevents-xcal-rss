@@ -1,6 +1,8 @@
 import os
+import sys
 import urllib
 import urllib.parse
+import logging
 
 import dateutil.parser
 import httpx
@@ -24,6 +26,7 @@ from jsonpath_ng.ext import parse
 from pymemcache.client import base
 
 from multiprocessing import Pool
+import time
 
 
 from rss_feed import (GUID, Category, Enclosure, Image, Item, RSSFeed, RSSResponse, XCalCategories)
@@ -56,8 +59,17 @@ uvicorn_workers = int(os.getenv("UVICORN_WORKERS"))
 kirkanta_base_url = os.getenv("KIRKANTA_BASE_URL")
 consortium_id = int(os.getenv("CONSORTIUM_ID"))
 api_client_pool_size = int(os.getenv("API_CLIENT_POOL_SIZE"))
-load_images_from_api = strtobool(os.getenv("LOAD_IMAGES_FROM_API") )
+load_images_from_api = strtobool(os.getenv("LOAD_IMAGES_FROM_API"))
 load_keywords_from_api = strtobool(os.getenv("LOAD_KEYWORDS_FROM_API"))
+skip_super_events = strtobool(os.getenv("SKIP_SUPER_EVENTS"))
+
+
+logger = logging.getLogger("feedgen.stdout")
+logger.setLevel(logging.getLevelName(os.getenv("LOG_LEVEL")))
+stream_handler = logging.StreamHandler(sys.stdout)
+log_formatter = logging.Formatter("%(asctime)s [%(levelname)s] [%(processName)s: %(process)d] [%(threadName)s: %(thread)d] %(name)s: %(message)s")
+stream_handler.setFormatter(log_formatter)
+logger.addHandler(stream_handler)
 
 
 memcached_client = base.Client('unix:/run/memcached/memcached.sock')
@@ -65,10 +77,10 @@ memcached_client = base.Client('unix:/run/memcached/memcached.sock')
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    scheduler.add_job(populate_cache, 'interval', id='populate_cache', seconds=cache_ttl)
-    scheduler.start()
+    job = scheduler.add_job(populate_cache, 'interval', id='populate_cache', seconds=cache_ttl)
     for job in scheduler.get_jobs():
         job.modify(next_run_time=datetime.now())
+    scheduler.start()
     yield
     scheduler.remove_job('populate_cache')
     scheduler.shutdown(wait=False)
@@ -77,8 +89,7 @@ async def lifespan(app: FastAPI):
 scheduler = BackgroundScheduler(
     jobstores={'default': MemoryJobStore()},
     executors={'default': ProcessPoolExecutor(2)},
-    job_defaults={'coalesce': True, 'max_instances': 1},
-    timezone='Europe/Helsinki'
+    job_defaults={'coalesce': True, 'max_instances': 1}
 )
 
 
@@ -96,11 +107,16 @@ def get_and_store_events(id):
                     skip_empty=True
                 )
             )
-    except BaseException:
+            logger.debug(f"Updated {id}, lang {lang}")
+    except BaseException as e:
+        logger.error(f"Data fetch error {e}")
         pass
 
 
 def populate_cache():
+    start_time = time.time()
+    logger.info("Started feed update job.")
+
     libraries = httpx.get(
         '{kirkanta_base_url}/library?consortium={consortium}&with=customData'.format(
             kirkanta_base_url=kirkanta_base_url,
@@ -124,6 +140,8 @@ def populate_cache():
 
     with Pool(api_client_pool_size) as fetcher_pool:
         fetcher_pool.map(get_and_store_events, ids)
+
+    logger.info(f"Completed feed update job in {time.time() - start_time} seconds.")
 
 
 def get_preferred_or_first(root, pathIfExist, pathOfPreferred, pathOfFirst):
@@ -191,6 +209,13 @@ def parse_to_itemlist(linked_events_json, preferred_language, locations):
     fetch_image_data = load_images_from_api
     for data in parse('$.data[*]').find(linked_events_json):
         event = data.value
+        is_super_event = get_preferred_or_first(event, "$.super_event_type", "$.super_event_type", "$.super_event_type") is not None
+        id = get_preferred_or_first(event, '$.id', '$.id', '$.id')
+
+        if (is_super_event and skip_super_events):
+            logger.debug(f"Skipped: super event {id}")
+            pass
+
         categories = []
         if include_categories:
             for keyword in [match.value for match in parse('$.keywords[*]').find(event)]:
@@ -226,7 +251,6 @@ def parse_to_itemlist(linked_events_json, preferred_language, locations):
             enclosure = None
             image = None
 
-        id = get_preferred_or_first(event, '$.id', '$.id', '$.id')
         location_id = get_preferred_or_first(event, '$.location.@id', '$.location.@id', '$.location.@id')
 
         if event_url_template is not None:
@@ -329,12 +353,15 @@ async def get_events(
     except BaseException:
         raise HTTPException(status_code=404, detail="Feed not found")
 
+log_config = uvicorn.config.LOGGING_CONFIG
+log_config["formatters"]["default"]["fmt"] = log_formatter._fmt
+log_config["formatters"]["access"]["fmt"] = log_formatter._fmt
 
 config = uvicorn.Config(
     app=app,
     host="0.0.0.0",
     port=8000,
-    log_level="info",
+    log_config=log_config,
     workers=uvicorn_workers
 )
 server = uvicorn.Server(config=config)
