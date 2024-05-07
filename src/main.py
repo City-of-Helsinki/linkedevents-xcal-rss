@@ -50,18 +50,18 @@ def strtobool(value, raise_exc=False):
     return None
 
 
-feed_base_url = os.getenv("FEED_BASE_URL")
-linked_events_base_url = os.getenv("LINKED_EVENTS_BASE_URL")
-event_url_template = os.getenv("EVENT_URL_TEMPLATE")
-cache_ttl = int(os.getenv("CACHE_TTL"))
-cache_max_size = int(os.getenv("CACHE_MAX_SIZE"))
-uvicorn_workers = int(os.getenv("UVICORN_WORKERS"))
-kirkanta_base_url = os.getenv("KIRKANTA_BASE_URL")
-consortium_id = int(os.getenv("CONSORTIUM_ID"))
-api_client_pool_size = int(os.getenv("API_CLIENT_POOL_SIZE"))
-load_images_from_api = strtobool(os.getenv("LOAD_IMAGES_FROM_API"))
-load_keywords_from_api = strtobool(os.getenv("LOAD_KEYWORDS_FROM_API"))
-skip_super_events = strtobool(os.getenv("SKIP_SUPER_EVENTS"))
+FEED_BASE_URL = os.getenv("FEED_BASE_URL")
+LINKED_EVENTS_BASE_URL = os.getenv("LINKED_EVENTS_BASE_URL")
+EVENT_URL_TEMPLATE = os.getenv("EVENT_URL_TEMPLATE")
+CACHE_TTL = int(os.getenv("CACHE_TTL"))
+CACHE_MAX_SIZE = int(os.getenv("CACHE_MAX_SIZE"))
+UVICORN_WORKERS = int(os.getenv("UVICORN_WORKERS"))
+KIRKANTA_BASE_URL = os.getenv("KIRKANTA_BASE_URL")
+CONSORTIUM_ID = int(os.getenv("CONSORTIUM_ID"))
+API_CLIENT_POOL_SIZE = int(os.getenv("API_CLIENT_POOL_SIZE"))
+LOAD_IMAGES_FROM_API = strtobool(os.getenv("LOAD_IMAGES_FROM_API"))
+LOAD_KEYWORDS_FROM_API = strtobool(os.getenv("LOAD_KEYWORDS_FROM_API"))
+SKIP_SUPER_EVENTS = strtobool(os.getenv("SKIP_SUPER_EVENTS"))
 
 
 logger = logging.getLogger("feedgen.stdout")
@@ -77,7 +77,7 @@ memcached_client = base.Client('unix:/run/memcached/memcached.sock')
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    job = scheduler.add_job(populate_cache, 'interval', id='populate_cache', seconds=cache_ttl)
+    job = scheduler.add_job(populate_cache, 'interval', id='populate_cache', replace_existing=True, seconds=CACHE_TTL)
     for job in scheduler.get_jobs():
         job.modify(next_run_time=datetime.now())
     scheduler.start()
@@ -118,9 +118,9 @@ def populate_cache():
     logger.info("Started feed update job.")
 
     libraries = httpx.get(
-        '{kirkanta_base_url}/library?consortium={consortium}&with=customData'.format(
-            kirkanta_base_url=kirkanta_base_url,
-            consortium=consortium_id)
+        '{KIRKANTA_BASE_URL}/library?consortium={consortium}&with=customData'.format(
+            KIRKANTA_BASE_URL=KIRKANTA_BASE_URL,
+            consortium=CONSORTIUM_ID)
         ).json()
 
     total = int(parse('$.total').find(libraries)[0].value)
@@ -130,15 +130,15 @@ def populate_cache():
 
     while parsed < total:
         libraries = httpx.get(
-            '{kirkanta_base_url}/library?consortium={consortium}&with=customData&skip={skip}'.format(
-                kirkanta_base_url=kirkanta_base_url,
-                consortium=consortium_id,
+            '{KIRKANTA_BASE_URL}/library?consortium={consortium}&with=customData&skip={skip}'.format(
+                KIRKANTA_BASE_URL=KIRKANTA_BASE_URL,
+                consortium=CONSORTIUM_ID,
                 skip=parsed)
         ).json()
         parsed += len([id.value for id in parse("$.items[*]").find(libraries)])
         ids += [id.value for id in parse("$.items[*].customData[?(@.id == 'le_rss_locations')].value").find(libraries)]
 
-    with Pool(api_client_pool_size) as fetcher_pool:
+    with Pool(API_CLIENT_POOL_SIZE) as fetcher_pool:
         fetcher_pool.map(get_and_store_events, ids)
 
     logger.info(f"Completed feed update job in {time.time() - start_time} seconds.")
@@ -185,7 +185,7 @@ def get_locations(location_string, preferred_language):
     locations = {}
     for loc in location_string.split(","):
         try:
-            resp = httpx.get(f'{linked_events_base_url}/place/{loc}/')
+            resp = httpx.get(f'{LINKED_EVENTS_BASE_URL}/place/{loc}/')
             if resp.status_code != 200:
                 raise HTTPException(status_code=404, detail=f"Place not found: {loc}")
             aid = get_preferred_or_first(resp.json(), '$.@id', '$.@id')
@@ -202,14 +202,14 @@ def get_locations(location_string, preferred_language):
 
 def parse_to_itemlist(linked_events_json, preferred_language, locations):
     items = []
-    include_categories = load_keywords_from_api
-    fetch_image_data = load_images_from_api
+    include_categories = LOAD_KEYWORDS_FROM_API
+    fetch_image_data = LOAD_IMAGES_FROM_API
     for data in parse('$.data[*]').find(linked_events_json):
         event = data.value
         is_super_event = get_preferred_or_first(event, "$.super_event_type", "$.super_event_type") is not None
         id = get_preferred_or_first(event, '$.id', '$.id')
 
-        if (is_super_event and skip_super_events):
+        if (is_super_event and SKIP_SUPER_EVENTS):
             logger.debug(f"Skipped: super event {id}")
         else:
             categories = []
@@ -249,8 +249,8 @@ def parse_to_itemlist(linked_events_json, preferred_language, locations):
 
             location_id = get_preferred_or_first(event, '$.location.@id', '$.location.@id')
 
-            if event_url_template is not None:
-                eventUrl = event_url_template.format(id=id)
+            if EVENT_URL_TEMPLATE is not None:
+                eventUrl = EVENT_URL_TEMPLATE.format(id=id)
             else:
                 eventUrl = get_preferred_or_first(event, f'$.info_url.{preferred_language}', '$.info_url.*')
                 if eventUrl is None or eventUrl == "":
@@ -270,7 +270,7 @@ def parse_to_itemlist(linked_events_json, preferred_language, locations):
                     author=locations[location_id].get("email"),
                     category=categories,
                     enclosure=enclosure,
-                    guid=GUID(content=f'{linked_events_base_url}/event/{id}', is_permalink=None),
+                    guid=GUID(content=f'{LINKED_EVENTS_BASE_URL}/event/{id}', is_permalink=None),
                     pub_date=dateutil.parser.parse(
                         get_preferred_or_first(event, '$.last_modified_time', '$.last_modified_time')
                     ),
@@ -309,7 +309,7 @@ def get_linked_events_for_location(
 
     while next:
         response = httpx.get(
-            f"{linked_events_base_url}/event/?location={location_string}{"&include=keywords" if include_categories else ""}&days=31&sort=start_time&page={page_number}"
+            f"{LINKED_EVENTS_BASE_URL}/event/?location={location_string}{"&include=keywords" if include_categories else ""}&days=31&sort=start_time&page={page_number}"
         )
         items += parse_to_itemlist(response.json(), preferred_language, locations)
         next_page = parse('$.meta.next').find(response.json())[0].value
@@ -323,7 +323,7 @@ def get_linked_events_for_location(
     channel = {
         'title': ", ".join([value.get("name") for key, value in locations.items() if value.get("name")]),
         'link':
-            f'{feed_base_url}/events?location={location_string}' +
+            f'{FEED_BASE_URL}/events?location={location_string}' +
             f'&preferred_language={preferred_language}' +
             f'{'&fetch_image_data=true' if fetch_image_data else ''}' +
             f'{'&include_categories=true' if include_categories else ''}',
@@ -331,7 +331,7 @@ def get_linked_events_for_location(
         'language': '',
         'pub_date': aware_utcnow(),
         'last_build_date': aware_utcnow(),
-        'ttl': cache_ttl,
+        'ttl': CACHE_TTL,
         'item': items,
     }
 
@@ -358,7 +358,7 @@ config = uvicorn.Config(
     host="0.0.0.0",
     port=8000,
     log_config=log_config,
-    workers=uvicorn_workers
+    workers=UVICORN_WORKERS
 )
 server = uvicorn.Server(config=config)
 
