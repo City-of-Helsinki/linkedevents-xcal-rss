@@ -57,6 +57,12 @@ class Channel(BaseXmlModel, tag="channel"):
     item: List[Item] = element(tag="item", default_factory=list)
 
 
-class RSSFeed(BaseXmlModel, tag="rss", nsmap={"xcal": "urn:ietf:params:xml:ns:xcal"}):
+class RSSFeed(
+        BaseXmlModel,
+        tag="rss",
+        nsmap={
+            "ev": "http://purl.org/rss/2.0/modules/event/",
+            "xcal": "urn:ietf:params:xml:ns:xcal"
+        }):
     version: str = attr(name="version", default="2.0")
     content: Channel

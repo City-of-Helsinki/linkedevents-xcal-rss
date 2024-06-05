@@ -29,7 +29,7 @@ from multiprocessing import Pool
 import time
 
 
-from rss_feed import (GUID, Category, Enclosure, Image, Item, RSSFeed, RSSResponse, XCalCategories)
+from rss_feed import (GUID, Category, Enclosure, Image, Item, RSSFeed, RSSResponse, XCalCategories, EventMeta)
 
 load_dotenv()
 
@@ -262,6 +262,10 @@ def parse_to_itemlist(linked_events_json, preferred_language, locations):
             if organizer is None or organizer == "":
                 organizer = get_preferred_or_first(event, f'$.location.name.{preferred_language}', '$.location.name.*')
 
+            event_cost = get_preferred_or_first(event, '$.offers[*].price[*].{preferred_language}', '$.offers[*].price[*].*')
+            event_start = dateutil.parser.parse(get_preferred_or_first(event, '$.start_time', '$.start_time'))
+            event_end = dateutil.parser.parse(get_preferred_or_first(event, '$.end_time', '$.end_time'))
+
             items.append(
                 Item(
                     title=title,
@@ -276,12 +280,8 @@ def parse_to_itemlist(linked_events_json, preferred_language, locations):
                     ),
                     xcal_title=title,
                     xcal_featured=image,
-                    xcal_dtstart=dateutil.parser.parse(
-                        get_preferred_or_first(event, '$.start_time', '$.start_time')
-                    ),
-                    xcal_dtend=dateutil.parser.parse(
-                        get_preferred_or_first(event, '$.end_time', '$.end_time')
-                    ),
+                    xcal_dtstart=event_start,
+                    xcal_dtend=event_end,
                     xcal_content=get_preferred_or_first(event, f'$.short_description.{preferred_language}', '$.short_description.*'),
                     xcal_organizer=organizer,
                     xcal_organizer_url=get_preferred_or_first(event, f'$.info_url.name.{preferred_language}', '$.info_url.name.*'),
@@ -289,8 +289,15 @@ def parse_to_itemlist(linked_events_json, preferred_language, locations):
                     xcal_location_address=locations[location_id].get("street_address"),
                     xcal_location_city=locations[location_id].get("locality"),
                     xcal_url=eventUrl,
-                    xcal_cost=get_preferred_or_first(event, '$.offers[*].price[*].{preferred_language}', '$.offers[*].price[*].*'),
+                    xcal_cost=event_cost,
                     xcal_categories=XCalCategories(content=categories),
+                    event_location=locations[location_id].get("name"),
+                    event_location_address=locations[location_id].get("street_address"),
+                    event_location_city=locations[location_id].get("locality"),
+                    event_organizer=organizer,
+                    event_organizer_url=eventUrl,
+                    event_cost=event_cost,
+                    event_meta=EventMeta(dtstart=event_start, dtend=event_end)
                 )
             )
     return items

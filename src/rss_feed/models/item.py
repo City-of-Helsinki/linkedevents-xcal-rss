@@ -17,6 +17,20 @@ class XCalCategories(BaseXmlModel):
     )
 
 
+class EventMeta(BaseXmlModel):
+    @field_serializer("dtstart", "dtend")
+    def convert_timestamp(dt: datetime) -> str:
+        dt.replace(tzinfo=timezone.utc)
+        return dt.strftime("%Y-%m-%d%Z%H:%M:%S")
+
+    dtstart: Optional[datetime] = element(
+        tag="dtstart", default=None, nsmap={"": "http://purl.org/rss/2.0/modules/event/"}
+    )
+    dtend: Optional[datetime] = element(
+        tag="dtend", default=None, nsmap={"": "http://purl.org/rss/2.0/modules/event/"}
+    )
+
+
 class Item(BaseXmlModel):
     @field_serializer("pub_date")
     def convert_datetime_to_RFC_822(dt: datetime) -> str:
@@ -25,6 +39,11 @@ class Item(BaseXmlModel):
         return f"{ctime[0:3]}, {dt.day:02d} {ctime[4:7]}" + dt.strftime(
             " %Y %H:%M:%S %z"
         )
+
+    @field_serializer("xcal_dtstart", "xcal_dtend")
+    def convert_timestamp(dt: datetime) -> str:
+        dt.replace(tzinfo=timezone.utc)
+        return dt.strftime("%Y-%m-%d%Z%H:%M:%S")
 
     # Basic RSS Item fields
     title: str = element(tag="title")
@@ -59,6 +78,43 @@ class Item(BaseXmlModel):
     )
     source: Optional[Source] = element(
         tag="source",
+        default=None,
+    )
+
+    # RSS extension item fields
+    event_location: Optional[str] = element(
+        tag="location",
+        nsmap={"": "http://purl.org/rss/2.0/modules/event/"},
+        default=None,
+    )
+    event_location_address: Optional[str] = element(
+        tag="location-address",
+        nsmap={"": "http://purl.org/rss/2.0/modules/event/"},
+        default=None,
+    )
+    event_location_city: Optional[str] = element(
+        tag="location-city",
+        nsmap={"": "http://purl.org/rss/2.0/modules/event/"},
+        default=None,
+    )
+    event_organizer: Optional[str] = element(
+        tag="organizer",
+        nsmap={"": "http://purl.org/rss/2.0/modules/event/"},
+        default=None,
+    )
+    event_organizer_url: Optional[str] = element(
+        tag="organizer-url",
+        nsmap={"": "http://purl.org/rss/2.0/modules/event/"},
+        default=None,
+    )
+    event_cost: Optional[str] = element(
+        tag="cost",
+        nsmap={"": "http://purl.org/rss/2.0/modules/event/"},
+        default=None,
+    )
+    event_meta: Optional[EventMeta] = element(
+        tag="event_meta",
+        nsmap={"": "http://purl.org/rss/2.0/modules/event/"},
         default=None,
     )
 
