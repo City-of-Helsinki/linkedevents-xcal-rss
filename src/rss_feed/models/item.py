@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import pytz 
 from typing import List, Optional
 
 from pydantic import field_serializer
@@ -10,6 +11,9 @@ from .guid import GUID
 from .image import Image
 from .source import Source
 
+# FIXME: Remove harcoded timezone
+local_tz = pytz.timezone('Europe/Helsinki')
+
 
 class XCalCategories(BaseXmlModel):
     content: List[Category] = element(
@@ -18,10 +22,11 @@ class XCalCategories(BaseXmlModel):
 
 
 class EventMeta(BaseXmlModel):
+    # FIXME: The timestamp format is non-standard so that also the time part would be supported by Finna
     @field_serializer("dtstart", "dtend")
     def convert_timestamp(dt: datetime) -> str:
-        dt.replace(tzinfo=timezone.utc)
-        return dt.strftime("%Y-%m-%d%Z%H:%M:%S")
+        local_dt = dt.replace(tzinfo=pytz.utc).astimezone(local_tz)
+        return local_dt.strftime("%Y-%m-%d%Z%H:%M:%S")
 
     dtstart: Optional[datetime] = element(
         tag="dtstart", default=None, nsmap={"": "http://purl.org/rss/2.0/modules/event/"}
@@ -40,10 +45,11 @@ class Item(BaseXmlModel):
             " %Y %H:%M:%S %z"
         )
 
+    # FIXME: The timestamp format is non-standard so that also the time part would be supported by Finna
     @field_serializer("xcal_dtstart", "xcal_dtend")
     def convert_timestamp(dt: datetime) -> str:
-        dt.replace(tzinfo=timezone.utc)
-        return dt.strftime("%Y-%m-%d%Z%H:%M:%S")
+        local_dt = dt.replace(tzinfo=pytz.utc).astimezone(local_tz)
+        return local_dt.strftime("%Y-%m-%d%Z%H:%M:%S")
 
     # Basic RSS Item fields
     title: str = element(tag="title")
