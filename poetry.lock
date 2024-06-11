@@ -492,6 +492,17 @@ files = [
 ]
 
 [[package]]
+name = "pebble"
+version = "5.0.7"
+description = "Threading and multiprocessing eye-candy."
+optional = false
+python-versions = ">=3.6"
+files = [
+    {file = "Pebble-5.0.7-py3-none-any.whl", hash = "sha256:f1742f2a62e8544e722c7b387211fb1a06038ca8cda322e5d55c84c793fd8d7d"},
+    {file = "Pebble-5.0.7.tar.gz", hash = "sha256:2784c147766f06388cea784084b14bec93fdbaa793830f1983155aa330a2a6e4"},
+]
+
+[[package]]
 name = "pillow"
 version = "10.3.0"
 description = "Python Imaging Library (Fork)"
@@ -943,4 +954,4 @@ standard = ["colorama (>=0.4)", "httptools (>=0.5.0)", "python-dotenv (>=0.13)",
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.12"
-content-hash = "d157a8e9ac9d45ee91fee5a4bb67aa9369d082a7dfe1d827a62d9a245874aee0"
+content-hash = "ff82611cb6ef60329e14c912bbdd30659c5b585c926dd860eeed9b8840bbf154"

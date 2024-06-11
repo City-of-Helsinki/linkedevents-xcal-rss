@@ -25,7 +25,8 @@ from apscheduler.executors.pool import ProcessPoolExecutor
 from jsonpath_ng.ext import parse
 from pymemcache.client import base
 
-from multiprocessing import Pool
+from pebble import ProcessPool
+
 import time
 
 
@@ -59,6 +60,7 @@ UVICORN_WORKERS = int(os.getenv("UVICORN_WORKERS"))
 KIRKANTA_BASE_URL = os.getenv("KIRKANTA_BASE_URL")
 CONSORTIUM_ID = int(os.getenv("CONSORTIUM_ID"))
 API_CLIENT_POOL_SIZE = int(os.getenv("API_CLIENT_POOL_SIZE"))
+API_CLIENT_TIMEOUT_SECONDS = int(os.getenv("API_CLIENT_TIMEOUT_SECONDS", default=1))
 LOAD_IMAGES_FROM_API = strtobool(os.getenv("LOAD_IMAGES_FROM_API"))
 LOAD_KEYWORDS_FROM_API = strtobool(os.getenv("LOAD_KEYWORDS_FROM_API"))
 SKIP_SUPER_EVENTS = strtobool(os.getenv("SKIP_SUPER_EVENTS"))
@@ -93,7 +95,7 @@ scheduler = BackgroundScheduler(
 )
 
 
-def get_and_store_events(id):
+def get_and_store_events(id: str):
     try:
         for lang in ["fi", "en", "sv"]:
             memcached_client.set(
@@ -111,6 +113,17 @@ def get_and_store_events(id):
     except BaseException as e:
         logger.error(f"Data fetch error {e}")
         pass
+    return id
+
+
+def task_done(future):
+    try:
+        future.result()
+    except TimeoutError:
+        logger.error("Feed generation timeout: " + future.id)
+        future.cancel()
+    except Exception as error:
+        logger.error(error)
 
 
 def populate_cache():
@@ -138,8 +151,11 @@ def populate_cache():
         parsed += len([id.value for id in parse("$.items[*]").find(libraries)])
         ids += [id.value for id in parse("$.items[*].customData[?(@.id == 'le_rss_locations')].value").find(libraries)]
 
-    with Pool(API_CLIENT_POOL_SIZE) as fetcher_pool:
-        fetcher_pool.map(get_and_store_events, ids)
+    with ProcessPool(max_workers=API_CLIENT_POOL_SIZE) as fetcher_pool:
+        for id in ids:
+            future = fetcher_pool.schedule(get_and_store_events, kwargs={"id": id}, timeout=API_CLIENT_TIMEOUT_SECONDS)
+            future.id = id
+            future.add_done_callback(task_done)
 
     logger.info(f"Completed feed update job in {time.time() - start_time} seconds.")
 
@@ -185,7 +201,7 @@ def get_locations(location_string, preferred_language):
     locations = {}
     for loc in location_string.split(","):
         try:
-            resp = httpx.get(f'{LINKED_EVENTS_BASE_URL}/place/{loc}/')
+            resp = httpx.get(f'{LINKED_EVENTS_BASE_URL}/place/{loc}/', timeout=API_CLIENT_TIMEOUT_SECONDS)
             if resp.status_code != 200:
                 raise HTTPException(status_code=404, detail=f"Place not found: {loc}")
             aid = get_preferred_or_first(resp.json(), '$.@id', '$.@id')

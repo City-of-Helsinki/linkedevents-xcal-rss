@@ -190,6 +190,9 @@ lxml==5.2.1 ; python_version >= "3.12" and python_version < "4.0" \
     --hash=sha256:feaa45c0eae424d3e90d78823f3828e7dc42a42f21ed420db98da2c4ecf0a2cb \
     --hash=sha256:ff097ae562e637409b429a7ac958a20aab237a0378c42dabaa1e3abf2f896e5f \
     --hash=sha256:ff46d772d5f6f73564979cd77a4fffe55c916a05f3cb70e7c9c0590059fb29ef
+pebble==5.0.7 ; python_version >= "3.12" and python_version < "4.0" \
+    --hash=sha256:2784c147766f06388cea784084b14bec93fdbaa793830f1983155aa330a2a6e4 \
+    --hash=sha256:f1742f2a62e8544e722c7b387211fb1a06038ca8cda322e5d55c84c793fd8d7d
 pillow==10.3.0 ; python_version >= "3.12" and python_version < "4.0" \
     --hash=sha256:048ad577748b9fa4a99a0548c64f2cb8d672d5bf2e643a739ac8faff1164238c \
     --hash=sha256:048eeade4c33fdf7e08da40ef402e748df113fd0b4584e32c4af74fe78baaeb2 \

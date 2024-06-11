@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import pytz 
 from typing import List, Optional
 
 from pydantic import field_serializer
@@ -9,6 +10,9 @@ from .cloud import Cloud
 from .image import Image
 from .item import Item
 from .textinput import TextInput
+
+# FIXME: Remove harcoded timezone
+local_tz = pytz.timezone('Europe/Helsinki')
 
 
 class Hours(BaseXmlModel, tag="hour"):
@@ -23,8 +27,9 @@ class Channel(BaseXmlModel, tag="channel"):
     @field_serializer("pub_date", "last_build_date")
     def convert_datetime_to_RFC_822(dt: datetime) -> str:
         dt.replace(tzinfo=timezone.utc)
-        ctime = dt.ctime()
-        return f"{ctime[0:3]}, {dt.day:02d} {ctime[4:7]}" + dt.strftime(
+        local_dt = dt.replace(tzinfo=pytz.utc).astimezone(local_tz)
+        ctime = local_dt.ctime()
+        return f"{ctime[0:3]}, {local_dt.day:02d} {ctime[4:7]}" + local_dt.strftime(
             " %Y %H:%M:%S %z"
         )
 

@@ -40,8 +40,10 @@ class Item(BaseXmlModel):
     @field_serializer("pub_date")
     def convert_datetime_to_RFC_822(dt: datetime) -> str:
         dt.replace(tzinfo=timezone.utc)
-        ctime = dt.ctime()
-        return f"{ctime[0:3]}, {dt.day:02d} {ctime[4:7]}" + dt.strftime(
+        dt.replace(tzinfo=timezone.utc)
+        local_dt = dt.replace(tzinfo=pytz.utc).astimezone(local_tz)
+        ctime = local_dt.ctime()
+        return f"{ctime[0:3]}, {local_dt.day:02d} {ctime[4:7]}" + local_dt.strftime(
             " %Y %H:%M:%S %z"
         )
 
