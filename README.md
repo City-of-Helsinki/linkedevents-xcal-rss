@@ -28,8 +28,9 @@ See the table below for reference:
 
 | Environment variable | Purpose | Example value |
 | - | - | - |
-| FEED_BASE_URL | Your LinkedEvents API endpoint base URL. <br/> **NOTE:** *Make sure to replace this with your own!* | https://api.hel.fi/linkedevents/v1 |
-| LINKED_EVENTS_BASE_URL | Finna LinkedEvents event template URL. The links in the RSS feed will point to this URL. <br/>  **NOTE:** *you should only need to replace the subdomain part e.g. n in n.finna.fi*.  | https://helmet.finna.fi/FeedContent/LinkedEvents?id={id} |
+| FEED_BASE_URL | Base URL of the RSS feed. RSS feeds contain an URL pointing to the feed itself. Each feed generated contains this URL and the locations and language parameters. <br/> **NOTE:** This is a part of the RSS spec, and required for the feed to pass validation, but is not shown in Finna. | https://example.org/ |
+| LINKED_EVENTS_BASE_URL | Your LinkedEvents API endpoint base URL. <br/> **NOTE:** *Make sure to replace this with your own!* | https://api.hel.fi/linkedevents/v1 |
+| EVENT_URL_TEMPLATE | Finna LinkedEvents event template URL. The links in the RSS feed will point to this URL. <br/>  **NOTE:** *you should only need to replace the subdomain part e.g. n in n.finna.fi*.  | https://helmet.finna.fi/FeedContent/LinkedEvents?id={id} |
 | CACHE_TTL | Cache update interval in seconds. | 3600 |
 | CACHE_MAX_SIZE | The maximum amount of entries in the cache. | 3600 |
 | UVICORN_WORKERS | The amount of worker processess to handle incoming web requests. | 4 |
