@@ -7,7 +7,7 @@ The RSS feeds created by this service contain all the events for a given Linked 
 
 The service depends on Kirkanta for library service point id to Linked Events location id mapping (one to many). Likewise, Kirkanta stores the events RSS feed URL pointing to this service.
 
-The service is intended to be run in a (Docker) container. The Docker container consists of a FastAPI Python application and an internal memcached instance integrated via file socket. In addition to memcached in the container, the FastAPI app uses internally APScheduler and multiprocessing for feed updates. This way, only a single container is used without any external services needed to deployed to run the application.
+The service is intended to be run in a (Docker) container. The Docker container consists of a FastAPI Python application and an internal memcached instance integrated via file socket. In addition to memcached in the container, the FastAPI app uses internally APScheduler and Pebble for feed updates. This way, only a single container is used without any external services needed to deployed to run the application.
 
 At container launch the internal memcahced will be empty and the service will immediately start an update process to populate the cahce. The scheduled task will then refresh the cache as configured in the .env file (default: hourly) from that point of time onwards.
 
