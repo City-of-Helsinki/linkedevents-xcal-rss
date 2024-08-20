@@ -279,8 +279,21 @@ def parse_to_itemlist(linked_events_json, preferred_language, locations):
                 organizer = get_preferred_or_first(event, f'$.location.name.{preferred_language}', '$.location.name.*')
 
             event_cost = get_preferred_or_first(event, '$.offers[*].price[*].{preferred_language}', '$.offers[*].price[*].*')
-            event_start = dateutil.parser.parse(get_preferred_or_first(event, '$.start_time', '$.start_time'))
-            event_end = dateutil.parser.parse(get_preferred_or_first(event, '$.end_time', '$.end_time'))
+
+            try:
+                event_start = dateutil.parser.parse(get_preferred_or_first(event, '$.start_time', '$.start_time'))
+            except BaseException:
+                logger.warning("event: " + id + " missing start time")
+
+            try:
+                event_end = dateutil.parser.parse(get_preferred_or_first(event, '$.end_time', '$.end_time'))
+            except BaseException:
+                logger.warning("event: " + id + " missing end time")
+
+            try:
+                pub_date = dateutil.parser.parse(get_preferred_or_first(event, '$.last_modified_time', '$.last_modified_time'))
+            except BaseException:
+                logger.warning("event: " + id + " missing last modified time")
 
             items.append(
                 Item(
@@ -291,9 +304,7 @@ def parse_to_itemlist(linked_events_json, preferred_language, locations):
                     category=categories,
                     enclosure=enclosure,
                     guid=GUID(content=f'{LINKED_EVENTS_BASE_URL}/event/{id}', is_permalink=None),
-                    pub_date=dateutil.parser.parse(
-                        get_preferred_or_first(event, '$.last_modified_time', '$.last_modified_time')
-                    ),
+                    pub_date=pub_date,
                     xcal_title=title,
                     xcal_featured=image,
                     xcal_dtstart=event_start,
