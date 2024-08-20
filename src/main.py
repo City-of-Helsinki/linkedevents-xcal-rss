@@ -28,12 +28,17 @@ from pymemcache.client import base
 from pebble import ProcessPool
 
 import time
-
+import sentry_sdk
 
 from rss_feed import (GUID, Category, Enclosure, Image, Item, RSSFeed, RSSResponse, XCalCategories, EventMeta)
 
 load_dotenv()
 
+sentry_sdk.init(
+     dsn=os.getenv("SENTRY_DSN"),
+     environment=os.getenv("SENTRY_ENVIRONMENT"),
+     traces_sample_rate=0.85,
+)
 
 def strtobool(value, raise_exc=False):
     _true_set = {'yes', 'true', 't', 'y', '1'}
@@ -100,7 +105,7 @@ def get_and_store_events(id: str):
         for lang in ["fi", "en", "sv"]:
             memcached_client.set(
                 f"{id},{lang}",
-                get_linked_events_for_location(
+                create_feed_for_location(
                     f"{id}", lang, True, True)
                 .to_xml(
                     pretty_print=False,
@@ -111,7 +116,7 @@ def get_and_store_events(id: str):
             )
             logger.debug(f"Updated {id}, lang {lang}")
     except BaseException as e:
-        logger.error(f"Data fetch error {e}")
+        logger.error(f"Data fetch error for {id}: {e}")
         pass
     return id
 
@@ -151,8 +156,10 @@ def populate_cache():
         parsed += len([id.value for id in parse("$.items[*]").find(libraries)])
         ids += [id.value for id in parse("$.items[*].customData[?(@.id == 'le_rss_locations')].value").find(libraries)]
 
+    logger.info(f"Updating feeds for {len(ids)} libraries ({len(set(ids))} unique locations)")
+
     with ProcessPool(max_workers=API_CLIENT_POOL_SIZE) as fetcher_pool:
-        for id in ids:
+        for id in set(ids):
             future = fetcher_pool.schedule(get_and_store_events, kwargs={"id": id}, timeout=API_CLIENT_TIMEOUT_SECONDS)
             future.id = id
             future.add_done_callback(task_done)
@@ -283,17 +290,20 @@ def parse_to_itemlist(linked_events_json, preferred_language, locations):
             try:
                 event_start = dateutil.parser.parse(get_preferred_or_first(event, '$.start_time', '$.start_time'))
             except BaseException:
-                logger.warning("event: " + id + " missing start time")
+                logger.error(f"event: {id} missing start time, lang: {preferred_language}")
+                pass
 
             try:
                 event_end = dateutil.parser.parse(get_preferred_or_first(event, '$.end_time', '$.end_time'))
             except BaseException:
-                logger.warning("event: " + id + " missing end time")
+                logger.error(f"event: {id} missing end time, lang: {preferred_language}")
+                pass
 
             try:
                 pub_date = dateutil.parser.parse(get_preferred_or_first(event, '$.last_modified_time', '$.last_modified_time'))
             except BaseException:
-                logger.warning("event: " + id + " missing last modified time")
+                logger.error(f"event: {id} missing last modified time, lang: {preferred_language}")
+                pass
 
             items.append(
                 Item(
@@ -330,7 +340,7 @@ def parse_to_itemlist(linked_events_json, preferred_language, locations):
     return items
 
 
-def get_linked_events_for_location(
+def create_feed_for_location(
     location_string, preferred_language: str = 'fi',
     fetch_image_data: bool = True,
     include_categories: bool = True
@@ -342,17 +352,29 @@ def get_linked_events_for_location(
     next = True
 
     while next:
-        response = httpx.get(
-            f"{LINKED_EVENTS_BASE_URL}/event/?location={location_string}{"&include=keywords" if include_categories else ""}&days=31&sort=start_time&page={page_number}"
-        )
-        items += parse_to_itemlist(response.json(), preferred_language, locations)
-        next_page = parse('$.meta.next').find(response.json())[0].value
+        apiurl = f"{LINKED_EVENTS_BASE_URL}/event/?location={location_string}{"&include=keywords" if include_categories else ""}&days=31&sort=start_time&page={page_number}"
+
+        response = httpx.get(apiurl)
+        try:
+            items += parse_to_itemlist(response.json(), preferred_language, locations)
+        except BaseException:
+            logger.error(f"LinkedEvents API event item list parsing failed for: {apiurl}")
+        try:
+            next_page = parse('$.meta.next').find(response.json())[0].value
+        except BaseException:
+            logger.error(f"LinkedEvents API didn't return next_page: {apiurl}")
+            next_page = None
+
         if next_page is None:
             next = False
         else:
-            next = True
-            next_page_url = urllib.parse.urlparse(next_page, allow_fragments=False).query
-            page_number = int(urllib.parse.parse_qs(next_page_url)["page"][0])
+            try:
+                next_page_url = urllib.parse.urlparse(next_page, allow_fragments=False).query
+                page_number = int(urllib.parse.parse_qs(next_page_url)["page"][0])
+                next = True
+            except BaseException:
+                logger.error("Couldn't parse next page number.from Linked Events response.")
+                next = False
 
     channel = {
         'title': ", ".join([value.get("name") for key, value in locations.items() if value.get("name")]),
@@ -368,7 +390,6 @@ def get_linked_events_for_location(
         'ttl': CACHE_TTL,
         'item': items,
     }
-
     return RSSFeed(content=channel)
 
 
