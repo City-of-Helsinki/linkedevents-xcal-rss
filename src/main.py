@@ -69,6 +69,7 @@ API_CLIENT_TIMEOUT_SECONDS = int(os.getenv("API_CLIENT_TIMEOUT_SECONDS", default
 LOAD_IMAGES_FROM_API = strtobool(os.getenv("LOAD_IMAGES_FROM_API"))
 LOAD_KEYWORDS_FROM_API = strtobool(os.getenv("LOAD_KEYWORDS_FROM_API"))
 SKIP_SUPER_EVENTS = strtobool(os.getenv("SKIP_SUPER_EVENTS"))
+SUPPORTED_LANGUAGES = os.getenv("SUPPORTED_LANGUAGES", default="fi,en,sv").split(",")
 
 
 logger = logging.getLogger("feedgen.stdout")
@@ -100,23 +101,22 @@ scheduler = BackgroundScheduler(
 )
 
 
-def get_and_store_events(id: str):
+def get_and_store_events(id: str, lang: str):
     try:
-        for lang in ["fi", "en", "sv"]:
-            memcached_client.set(
-                f"{id},{lang}",
-                create_feed_for_location(
-                    f"{id}", lang, True, True)
-                .to_xml(
-                    pretty_print=False,
-                    encoding="UTF-8",
-                    standalone=True,
-                    skip_empty=True
-                )
+        memcached_client.set(
+            f"{id},{lang}",
+            create_feed_for_location(
+                f"{id}", lang, True, True)
+            .to_xml(
+                pretty_print=False,
+                encoding="UTF-8",
+                standalone=True,
+                skip_empty=True
             )
-            logger.debug(f"Updated {id}, lang {lang}")
+        )
+        logger.debug(f"Updated {id}, lang {lang}")
     except BaseException as e:
-        logger.error(f"Data fetch error for {id}: {e}")
+        logger.error(f"Data fetch error for {id}, lang {lang}: {e}")
         pass
     return id
 
@@ -125,7 +125,7 @@ def task_done(future):
     try:
         future.result()
     except TimeoutError:
-        logger.error("Feed generation timeout: " + future.id)
+        logger.error(f"Feed generation timeout: {future.id}, lang {future.lang}")
         future.cancel()
     except Exception as error:
         logger.error(error)
@@ -160,9 +160,11 @@ def populate_cache():
 
     with ProcessPool(max_workers=API_CLIENT_POOL_SIZE) as fetcher_pool:
         for id in set(ids):
-            future = fetcher_pool.schedule(get_and_store_events, kwargs={"id": id}, timeout=API_CLIENT_TIMEOUT_SECONDS)
-            future.id = id
-            future.add_done_callback(task_done)
+            for lang in SUPPORTED_LANGUAGES:
+                future = fetcher_pool.schedule(get_and_store_events, kwargs={"id": id, "lang": lang}, timeout=API_CLIENT_TIMEOUT_SECONDS)
+                future.id = id
+                future.lang = lang
+                future.add_done_callback(task_done)
 
     logger.info(f"Completed feed update job in {time.time() - start_time} seconds.")
 
@@ -291,19 +293,16 @@ def parse_to_itemlist(linked_events_json, preferred_language, locations):
                 event_start = dateutil.parser.parse(get_preferred_or_first(event, '$.start_time', '$.start_time'))
             except BaseException:
                 logger.error(f"event: {id} missing start time, lang: {preferred_language}")
-                pass
 
             try:
                 event_end = dateutil.parser.parse(get_preferred_or_first(event, '$.end_time', '$.end_time'))
             except BaseException:
                 logger.error(f"event: {id} missing end time, lang: {preferred_language}")
-                pass
 
             try:
                 pub_date = dateutil.parser.parse(get_preferred_or_first(event, '$.last_modified_time', '$.last_modified_time'))
             except BaseException:
                 logger.error(f"event: {id} missing last modified time, lang: {preferred_language}")
-                pass
 
             items.append(
                 Item(
