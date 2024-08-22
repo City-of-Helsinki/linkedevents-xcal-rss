@@ -56,9 +56,6 @@ This part of the documentation is in Finnish as it's intended for the people who
     * preferred_language -parametriin kunkin kieliversion mukainen tunniste (fi, en, sv)
     * Esimerkki-URL: <br/> https://sovelluksen-osoite-omalla-docker-ajoalustalla.kaupunki.fi/events?linkedevents_location:1234&preferred_languange=fi ![Toimipaikan tapahtumasyötteen lisääminen Kirkantaan](doc_images/add_tapahtumat.png)
 
-
-
-
 ## Deploy to Docker container host
 
 Before running the service in your docker container host, you can test to locally with Docker.
@@ -74,8 +71,12 @@ The application will start and respond on port 8000 (see docker-compose.yml for 
 
 The instructions for Docker container hosts vary, but the easiest way to run the service is to build and run the included docker-compose.yml 
 
+## Development environment
+
+
+
 # Further development
 
-This application is designed and developed with the requirements and constraints of Helmet libraries. For example, the language support is hardcoded to be Finnish, Swedish and English. This could be updated to be configurable.
+This application is designed and developed with the requirements and constraints of Helmet libraries. It expects Sentry monitoring which must be configured in order for the service to work properly. 
 
 **NOTE!** Although running already in production for Helmet, this service is still a POC (proof-of-concept) and is not maintained by the City of Helsinki Executive Office application maintenance team. If you choose to deploy this service in production you are responsible for maintaining the security of the service yourself.
