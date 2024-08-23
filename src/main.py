@@ -106,7 +106,7 @@ def get_and_store_events(id: str, lang: str):
         memcached_client.set(
             f"{id},{lang}",
             create_feed_for_location(
-                f"{id}", lang, True, True)
+                f"{id}", lang)
             .to_xml(
                 pretty_print=False,
                 encoding="UTF-8",
@@ -340,11 +340,10 @@ def parse_to_itemlist(linked_events_json, preferred_language, locations):
 
 
 def create_feed_for_location(
-    location_string, preferred_language: str = 'fi',
-    fetch_image_data: bool = True,
-    include_categories: bool = True
+    location_string, preferred_language: str = 'fi'
 ):
     locations = get_locations(location_string=location_string, preferred_language=preferred_language)
+    include_categories = LOAD_KEYWORDS_FROM_API
 
     items = []
     page_number = 1
@@ -379,9 +378,7 @@ def create_feed_for_location(
         'title': ", ".join([value.get("name") for key, value in locations.items() if value.get("name")]),
         'link':
             f'{FEED_BASE_URL}/events?location={location_string}' +
-            f'&preferred_language={preferred_language}' +
-            f'{'&fetch_image_data=true' if fetch_image_data else ''}' +
-            f'{'&include_categories=true' if include_categories else ''}',
+            f'&preferred_language={preferred_language}',
         'description': ", ".join([value.get("name") for key, value in locations.items() if value.get("name")]),
         'language': '',
         'pub_date': aware_utcnow(),
