@@ -20,7 +20,7 @@ RUN yum -y update && \
 
 # Create and set permissions for memcached directory
 RUN mkdir /var/run/memcached/ && \
-    chown nobody:nogroup /var/run/memcached && \
+    chown nobody:0 /var/run/memcached && \
     chmod 0777 /var/run/memcached
 
 # Install Python dependencies
@@ -34,7 +34,7 @@ RUN chmod 0755 entrypoint.sh && \
     chown -R app:app /opt/app
 
 # Switch to the app user for runtime
-USER app
+USER USER nobody:0
 
 # Command to run the application
 CMD ["/bin/sh", "-c", "/opt/app/entrypoint.sh"]
