@@ -30,7 +30,7 @@ from pebble import ProcessPool
 import time
 import sentry_sdk
 
-from rss_feed import (GUID, Category, Enclosure, Image, Item, RSSFeed, RSSResponse, XCalCategories, EventMeta)
+from rss_feed import (GUID, Enclosure, Image, Item, RSSFeed, RSSResponse, EventMeta)
 
 load_dotenv()
 
@@ -67,7 +67,6 @@ CONSORTIUM_ID = int(os.getenv("CONSORTIUM_ID"))
 API_CLIENT_POOL_SIZE = int(os.getenv("API_CLIENT_POOL_SIZE"))
 API_CLIENT_TIMEOUT_SECONDS = int(os.getenv("API_CLIENT_TIMEOUT_SECONDS", default=1))
 LOAD_IMAGES_FROM_API = strtobool(os.getenv("LOAD_IMAGES_FROM_API"))
-LOAD_KEYWORDS_FROM_API = strtobool(os.getenv("LOAD_KEYWORDS_FROM_API"))
 SKIP_SUPER_EVENTS = strtobool(os.getenv("SKIP_SUPER_EVENTS"))
 SUPPORTED_LANGUAGES = os.getenv("SUPPORTED_LANGUAGES", default="fi,en,sv").split(",")
 
@@ -227,7 +226,6 @@ def get_locations(location_string, preferred_language):
 
 def parse_to_itemlist(linked_events_json, preferred_language, locations):
     items = []
-    include_categories = LOAD_KEYWORDS_FROM_API
     fetch_image_data = LOAD_IMAGES_FROM_API
     for data in parse('$.data[*]').find(linked_events_json):
         event = data.value
@@ -237,14 +235,6 @@ def parse_to_itemlist(linked_events_json, preferred_language, locations):
         if (is_super_event and SKIP_SUPER_EVENTS):
             logger.debug(f"Skipped: super event {id}")
         else:
-            categories = []
-            if include_categories:
-                for keyword in [match.value for match in parse('$.keywords[*]').find(event)]:
-                    categories.append(Category(
-                        content=get_preferred_or_first(keyword, f'$.name.{preferred_language}', '$.name.*').capitalize(),
-                        domain=parse('$.@id').find(keyword)[0].value
-                    ))
-
             imageUrl = get_preferred_or_first(event, '$.images[*].url', '$.images[*].url')
             if imageUrl is not None:
                 try:
@@ -310,7 +300,6 @@ def parse_to_itemlist(linked_events_json, preferred_language, locations):
                     link=eventUrl,
                     description=get_preferred_or_first(event, f'$.short_description.{preferred_language}', '$.short_description.*'),
                     author=locations[location_id].get("email"),
-                    category=categories,
                     enclosure=enclosure,
                     guid=GUID(content=f'{LINKED_EVENTS_BASE_URL}/event/{id}', is_permalink=None),
                     pub_date=pub_date,
@@ -326,7 +315,6 @@ def parse_to_itemlist(linked_events_json, preferred_language, locations):
                     xcal_location_city=locations[location_id].get("locality"),
                     xcal_url=eventUrl,
                     xcal_cost=event_cost,
-                    xcal_categories=XCalCategories(content=categories),
                     event_location=locations[location_id].get("name"),
                     event_location_address=locations[location_id].get("street_address"),
                     event_location_city=locations[location_id].get("locality"),
@@ -343,15 +331,14 @@ def create_feed_for_location(
     location_string, preferred_language: str = 'fi'
 ):
     locations = get_locations(location_string=location_string, preferred_language=preferred_language)
-    include_categories = LOAD_KEYWORDS_FROM_API
 
     items = []
     page_number = 1
     next = True
 
     while next:
-        apiurl = f"{LINKED_EVENTS_BASE_URL}/event/?location={location_string}{"&include=keywords" if include_categories else ""}&days=31&sort=start_time&page={page_number}"
-
+        
+        apiurl = f"{LINKED_EVENTS_BASE_URL}/event/?location={location_string}&days=31&sort=start_time&page={page_number}"
         response = httpx.get(apiurl)
         try:
             items += parse_to_itemlist(response.json(), preferred_language, locations)

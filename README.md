@@ -40,7 +40,6 @@ See the table below for reference:
 | API_CLIENT_TIMEOUT_SECONDS | The timeout value after which a feed update process for a particular service point id is killed. Note that a low value here will likely result in missing data. | 300 |
 | SKIP_SUPER_EVENTS | Boolean value to configure if super events should be ignored or not. | 1 | 
 | LOAD_IMAGES_FROM_API | Boolean value to configure if the feed update agent should also process the feed entry image to include proper file size and image dimensions. <br/> **NOTE:** *There is no real need to set this to 1 as Finna doesn't need the actual values, but shows the images just as well with placeholder values, too.* | 0 |
-| LOAD_KEYWORDS_FROM_API | Boolean value to configure if the feed update agent should also include the LinkedEvents keywords in the feed. <br/> **NOTE:** *Finna doesn't seem to actually use the RSS feed keywords so it's best to set the configuration to 0* | 0 |
 | LOG_LEVEL | The log level (DEBUG,INFO,WARNING,ERROR and CRITICAL) which the service uses. | INFO |
 
 ## Prepare your service point mapping and RSS feed configurations in Kirkanta

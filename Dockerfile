@@ -1,5 +1,5 @@
 # Use RHEL UBI image with Python 3.12
-FROM registry.access.redhat.com/ubi8/python-39 as app
+FROM registry.access.redhat.com/ubi8/python-312 as app
 
 # Switch to root user to ensure permission for system changes
 USER root
@@ -34,7 +34,7 @@ RUN chmod 0755 entrypoint.sh && \
     chown -R app:app /opt/app
 
 # Switch to the app user for runtime
-USER USER nobody:0
+USER nobody:0
 
 # Command to run the application
 CMD ["/bin/sh", "-c", "/opt/app/entrypoint.sh"]
