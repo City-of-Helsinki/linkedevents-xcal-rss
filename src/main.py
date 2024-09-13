@@ -16,7 +16,7 @@ from typing import Annotated
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Response
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.memory import MemoryJobStore
@@ -374,6 +374,16 @@ def create_feed_for_location(
         'item': items,
     }
     return RSSFeed(content=channel)
+
+
+@app.get("/readiness", tags=["readiness"])
+async def get_readiness():
+    return Response(status_code=200)
+
+
+@app.get("/healthz", tags=["healthz"])
+async def get_healthz():
+    return Response(status_code=200)
 
 
 @app.get("/events", tags=["events"])
