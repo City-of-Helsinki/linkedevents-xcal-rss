@@ -66,6 +66,7 @@ KIRKANTA_BASE_URL = os.getenv("KIRKANTA_BASE_URL")
 CONSORTIUM_ID = int(os.getenv("CONSORTIUM_ID"))
 API_CLIENT_POOL_SIZE = int(os.getenv("API_CLIENT_POOL_SIZE"))
 API_CLIENT_TIMEOUT_SECONDS = int(os.getenv("API_CLIENT_TIMEOUT_SECONDS", default=1))
+API_CLIENT_RETRIES = int(os.getenv("API_CLIENT_TIMEOUT_SECONDS", default=3))
 LOAD_IMAGES_FROM_API = strtobool(os.getenv("LOAD_IMAGES_FROM_API"))
 SKIP_SUPER_EVENTS = strtobool(os.getenv("SKIP_SUPER_EVENTS"))
 SUPPORTED_LANGUAGES = os.getenv("SUPPORTED_LANGUAGES", default="fi,en,sv").split(",")
@@ -80,6 +81,10 @@ logger.addHandler(stream_handler)
 
 
 memcached_client = base.Client('unix:/run/memcached/memcached.sock')
+
+
+http_transport = httpx.HTTPTransport(retries=API_CLIENT_RETRIES)
+http_client = httpx.Client(transport=http_transport)
 
 
 @asynccontextmanager
@@ -134,7 +139,7 @@ def populate_cache():
     start_time = time.time()
     logger.info("Started feed update job.")
 
-    libraries = httpx.get(
+    libraries = http_client.get(
         '{KIRKANTA_BASE_URL}/library?consortium={consortium}&with=customData'.format(
             KIRKANTA_BASE_URL=KIRKANTA_BASE_URL,
             consortium=CONSORTIUM_ID)
@@ -146,7 +151,7 @@ def populate_cache():
     ids = [id.value for id in parse("$.items[*].customData[?(@.id == 'le_rss_locations')].value").find(libraries) if not None]
 
     while parsed < total:
-        libraries = httpx.get(
+        libraries = http_client.get(
             '{KIRKANTA_BASE_URL}/library?consortium={consortium}&with=customData&skip={skip}'.format(
                 KIRKANTA_BASE_URL=KIRKANTA_BASE_URL,
                 consortium=CONSORTIUM_ID,
@@ -209,7 +214,7 @@ def get_locations(location_string, preferred_language):
     locations = {}
     for loc in location_string.split(","):
         try:
-            resp = httpx.get(f'{LINKED_EVENTS_BASE_URL}/place/{loc}/', timeout=API_CLIENT_TIMEOUT_SECONDS)
+            resp = http_client.get(f'{LINKED_EVENTS_BASE_URL}/place/{loc}/', timeout=API_CLIENT_TIMEOUT_SECONDS)
             if resp.status_code != 200:
                 raise HTTPException(status_code=404, detail=f"Place not found: {loc}")
             aid = get_preferred_or_first(resp.json(), '$.@id', '$.@id')
@@ -241,7 +246,7 @@ def parse_to_itemlist(linked_events_json, preferred_language, locations):
                     imageName = get_preferred_or_first(event, '$.images[*].name', '$.images[*].name')
                     imageAlt = get_preferred_or_first(event, '$.images[*].alt_text', '$.images[*].alt_text')
                     if fetch_image_data:
-                        image_raw = httpx.get(imageUrl)
+                        image_raw = http_client.get(imageUrl)
                         if image_raw.status_code != 200:
                             raise HTTPException(status_code=404, detail=f"Image not found: {imageUrl}")
                         length = image_raw.num_bytes_downloaded
@@ -339,7 +344,7 @@ def create_feed_for_location(
     while next:
         
         apiurl = f"{LINKED_EVENTS_BASE_URL}/event/?location={location_string}&days=31&sort=start_time&page={page_number}"
-        response = httpx.get(apiurl)
+        response = http_client.get(apiurl)
         try:
             items += parse_to_itemlist(response.json(), preferred_language, locations)
         except BaseException:
