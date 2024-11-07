@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
-import pytz 
+import pytz
+import html
+import re
 from typing import List, Optional
 
 from pydantic import field_serializer
@@ -32,6 +34,10 @@ class Channel(BaseXmlModel, tag="channel"):
         return f"{ctime[0:3]}, {local_dt.day:02d} {ctime[4:7]}" + local_dt.strftime(
             " %Y %H:%M:%S %z"
         )
+
+    @field_serializer("title", "link", "description", "language", "copyright", "managing_editor", "webmaster", "generator", "docs", "rating")
+    def escape_xml(string: str) -> str:
+        return html.escape(re.sub(u'[^\u0020-\uD7FF\u0009\u000A\u000D\uE000-\uFFFD\U00010000-\U0010FFFF]+', '', string), quote=True)
 
     # Required Feed elements
     title: str = element(tag="title", default="")

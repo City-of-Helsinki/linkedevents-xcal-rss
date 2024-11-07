@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
-import pytz 
+import pytz
+import html
+import re
 from typing import List, Optional
 
 from pydantic import field_serializer
@@ -47,7 +49,17 @@ class Item(BaseXmlModel):
             " %Y %H:%M:%S %z"
         )
 
+    @field_serializer(
+            "title", "description", "author", "comments", "event_location", "event_location_address",
+            "event_location_city", "event_organizer", "event_organizer_url", "event_cost",
+            "xcal_title", "xcal_content", "xcal_url", "xcal_cost", "xcal_location", "xcal_location_address",
+            "xcal_location_city", "xcal_organizer", "xcal_organizer_url"
+        )
+    def escape_xml(string: str) -> str:
+        return html.escape(re.sub(u'[^\u0020-\uD7FF\u0009\u000A\u000D\uE000-\uFFFD\U00010000-\U0010FFFF]+', '', string), quote=True)
+
     # FIXME: The timestamp format is non-standard so that also the time part would be supported by Finna
+
     @field_serializer("xcal_dtstart", "xcal_dtend")
     def convert_timestamp(dt: datetime) -> str:
         local_dt = dt.replace(tzinfo=pytz.utc).astimezone(local_tz)
