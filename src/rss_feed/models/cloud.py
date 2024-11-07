@@ -10,7 +10,7 @@ class Cloud(BaseXmlModel):
     @field_serializer("domain", "port", "path", "register_procedure", "protocol")
     def escape_xml(string: str) -> str:
         if string:
-            return html.escape(re.sub(u'[^\u0020-\uD7FF\u0009\u000A\u000D\uE000-\uFFFD\U00010000-\U0010FFFF]+', '', string), quote=True)
+            return html.escape(re.sub(u'[^\u0020-\uD7FF\u0009\u000A\u000D\uE000-\uFFFD\U00010000-\U0010FFFF]+', '', string), quote=False)
         else:
             return
 
