@@ -38,6 +38,7 @@ See the table below for reference:
 | KIRKANTA_BASE_URL | The base URL of Kirkanta API | https://api.kirjastot.fi/v4 |
 | API_CLIENT_POOL_SIZE | The number of concurrent feed update processes. | 10 |
 | API_CLIENT_TIMEOUT_SECONDS | The timeout value after which a feed update process for a particular service point id is killed. Note that a low value here will likely result in missing data. | 300 |
+| API_CLIENT_RETRIES | The amount of retries the API client tries in case of LinkedEvents failures. | 3 |
 | SKIP_SUPER_EVENTS | Boolean value to configure if super events should be ignored or not. | 1 | 
 | LOAD_IMAGES_FROM_API | Boolean value to configure if the feed update agent should also process the feed entry image to include proper file size and image dimensions. <br/> **NOTE:** *There is no real need to set this to 1 as Finna doesn't need the actual values, but shows the images just as well with placeholder values, too.* | 0 |
 | LOG_LEVEL | The log level (DEBUG,INFO,WARNING,ERROR and CRITICAL) which the service uses. | INFO |
