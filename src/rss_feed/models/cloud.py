@@ -9,7 +9,10 @@ from pydantic_xml import BaseXmlModel, attr
 class Cloud(BaseXmlModel):
     @field_serializer("domain", "port", "path", "register_procedure", "protocol")
     def escape_xml(string: str) -> str:
-        return html.escape(re.sub(u'[^\u0020-\uD7FF\u0009\u000A\u000D\uE000-\uFFFD\U00010000-\U0010FFFF]+', '', string), quote=True)
+        if string:
+            return html.escape(re.sub(u'[^\u0020-\uD7FF\u0009\u000A\u000D\uE000-\uFFFD\U00010000-\U0010FFFF]+', '', string), quote=True)
+        else:
+            return
 
     domain: Optional[str] = attr(name="domain")
     port: Optional[str] = attr(name="port")

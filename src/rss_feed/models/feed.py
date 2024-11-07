@@ -37,7 +37,10 @@ class Channel(BaseXmlModel, tag="channel"):
 
     @field_serializer("title", "link", "description", "language", "copyright", "managing_editor", "webmaster", "generator", "docs", "rating")
     def escape_xml(string: str) -> str:
-        return html.escape(re.sub(u'[^\u0020-\uD7FF\u0009\u000A\u000D\uE000-\uFFFD\U00010000-\U0010FFFF]+', '', string), quote=True)
+        if string:
+            return html.escape(re.sub(u'[^\u0020-\uD7FF\u0009\u000A\u000D\uE000-\uFFFD\U00010000-\U0010FFFF]+', '', string), quote=True)
+        else:
+            return
 
     # Required Feed elements
     title: str = element(tag="title", default="")

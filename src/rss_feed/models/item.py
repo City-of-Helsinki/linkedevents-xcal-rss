@@ -56,7 +56,10 @@ class Item(BaseXmlModel):
             "xcal_location_city", "xcal_organizer", "xcal_organizer_url"
         )
     def escape_xml(string: str) -> str:
-        return html.escape(re.sub(u'[^\u0020-\uD7FF\u0009\u000A\u000D\uE000-\uFFFD\U00010000-\U0010FFFF]+', '', string), quote=True)
+        if string:
+            return html.escape(re.sub(u'[^\u0020-\uD7FF\u0009\u000A\u000D\uE000-\uFFFD\U00010000-\U0010FFFF]+', '', string), quote=True)
+        else:
+            return
 
     # FIXME: The timestamp format is non-standard so that also the time part would be supported by Finna
 
