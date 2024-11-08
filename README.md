@@ -79,4 +79,4 @@ The instructions for Docker container hosts vary, but the easiest way to run the
 
 This application is designed and developed with the requirements and constraints of Helmet libraries. It expects Sentry monitoring which must be configured in order for the service to work properly. 
 
-**NOTE!** Although running already in production for Helmet, this service is still a POC (proof-of-concept) and is not maintained by the City of Helsinki Executive Office application maintenance team. If you choose to deploy this service in production you are responsible for maintaining the security of the service yourself.
+**NOTE!** Although running already in production for Helmet, this service is not actively maintained by the City of Helsinki Executive Office application maintenance team. If you choose to deploy this service in production you are responsible for maintaining the security of the service yourself.
